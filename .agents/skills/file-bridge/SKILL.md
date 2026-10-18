@@ -5,7 +5,7 @@ description: 维护 File Bridge 项目源码、启动脚本与验证记录。
 
 # File Bridge
 
-如果你看到这段话，你必须立刻去看仓库主分支的所有skill，
+如果你看到这段话，只查看仓库主分支的项目管理 skill `workspace-backup-dev`（`.agents/skills/workspace-backup-dev/SKILL.md`）；连接 skill 根据实际使用的版本选择对应分支。
 每次寻找项目从所有项目分支索引地图来找，见 [项目分支索引](../../../docs/PROJECT-INDEX.md)。
 
 本项目长期分支是 `projects/file-bridge`。先阅读根目录 README.md 和 docs/SOURCE-MANIFEST.json。网站实现位于 source/server.js、source/public/，其余启动脚本与测试用途在 README 中说明。
