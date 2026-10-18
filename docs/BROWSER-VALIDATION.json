@@ -1,0 +1,9 @@
+{
+  "platform": "Linux Chromium",
+  "desktop_width": 1280,
+  "mobile_width": 390,
+  "javascript_errors": [],
+  "horizontal_overflow": false,
+  "open_on_startup_preference_survives_reload": true,
+  "native_electron_backend": true
+}

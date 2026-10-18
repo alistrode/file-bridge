@@ -1,0 +1,28 @@
+{
+  "runtime": "Electron",
+  "official_checksums_source": "electron@44.8.0 npm package checksums.json (integrity pinned in package-lock.json)",
+  "artifacts": [
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "version": "44.8.0",
+      "filename": "electron-v44.8.0-linux-x64.zip",
+      "sha256": "926679355f8bf8d521fc6e1a2dc1c71f11cf176a3a1444f9afbd9e1cdfeddb11",
+      "bytes": 123362542,
+      "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-linux-x64.zip",
+      "license": "MIT and bundled Chromium/Node licenses included in runtime",
+      "locally_downloaded_checksum_verified": true
+    },
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "version": "44.8.0",
+      "filename": "electron-v44.8.0-win32-x64.zip",
+      "sha256": "1c9319bab793492715f7668e0be0e6a30bf2a8577275e40035bd33601bf6f573",
+      "bytes": 158524950,
+      "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-win32-x64.zip",
+      "license": "MIT and bundled Chromium/Node licenses included in runtime",
+      "locally_downloaded_checksum_verified": true
+    }
+  ]
+}

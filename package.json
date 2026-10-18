@@ -1,0 +1,9 @@
+{
+  "name": "file-bridge-desktop", "version": "2.0.0", "private": true,
+  "description": "Independent paired, encrypted, bidirectional File Bridge",
+  "main": "source/bridge/desktop.cjs",
+  "scripts": {"start":"node source/bridge/cli.cjs", "desktop":"electron .", "test":"node --test tests/bridge-unit.cjs", "test:public":"node tests/bridge-public.cjs"},
+  "engines":{"node":">=22"},
+  "dependencies":{"@serenity-kit/opaque":"1.1.0","https-proxy-agent":"7.0.6","mqtt":"5.16.1"},
+  "devDependencies":{"electron":"44.8.0"}
+}

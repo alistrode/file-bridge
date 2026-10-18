@@ -1,0 +1,22 @@
+{
+  "status": "development snapshot; validation in progress",
+  "saved_at": "2026-10-18T19:44:10.587877+00:00",
+  "completed": [
+    "Independent File Bridge implementation",
+    "8 Linux unit tests",
+    "Real public bidirectional pairing and transfer preflight",
+    "Linux browser functional checks and screenshot repeat comparison",
+    "Owned backend crash recovery",
+    "One-click source launchers and packaging scripts"
+  ],
+  "in_progress": [
+    "Final-source continuous validation",
+    "Native cloud Windows functional validation",
+    "B-host isolated validation",
+    "Final rebuilt runtime download verification"
+  ],
+  "notes": [
+    "Earlier interrupted soak rounds are not counted as final passing evidence",
+    "Native Windows helper startup is not counted as application validation"
+  ]
+}

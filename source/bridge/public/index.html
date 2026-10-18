@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="google" content="notranslate" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>File Bridge</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">FILE BRIDGE</p>
+          <h1>连接你的设备</h1>
+          <p>文字、图片和文件，在记住的设备间传递。</p>
+        </div>
+        <span id="connection" role="status">正在连接</span>
+      </header>
+      <p id="notice" role="status"></p>
+      <section class="grid">
+        <article>
+          <h2>添加设备</h2>
+          <p>
+            两边功能相同。在一台生成配对码，在另一台输入，成功后会记住设备。
+          </p>
+          <button id="create">生成一次性配对码</button>
+          <div id="offered" hidden>
+            <code id="code"></code><button id="copyCode">复制</button>
+            <p id="expiry"></p>
+            <button id="cancelCode" class="secondary">取消配对码</button>
+          </div>
+          <form id="pair">
+            <label for="pairCode">另一台设备的配对码</label
+            ><input
+              id="pairCode"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="输入配对码"
+              required
+            /><button id="join">配对并记住</button>
+          </form>
+        </article>
+        <article>
+          <h2>启动偏好</h2>
+          <label class="toggle"
+            ><input
+              type="checkbox"
+              id="loginStartup"
+            />登录电脑后启动托盘和连接</label
+          ><label class="toggle"
+            ><input
+              type="checkbox"
+              id="openOnStartup"
+            />自动启动时同时打开网页</label
+          >
+          <p id="startupState" class="muted"></p>
+          <p class="muted">
+            关闭网页不影响后台连接。退出或停止连接可使用托盘菜单。
+          </p>
+        </article>
+      </section>
+      <section>
+        <h2>已记住的设备</h2>
+        <div id="peers"></div>
+      </section>
+      <section class="grid">
+        <article>
+          <h2>发送内容</h2>
+          <label for="target">接收设备</label
+          ><select id="target"></select>
+          <form id="textForm">
+            <label for="text">文字</label
+            ><textarea
+              id="text"
+              maxlength="60000"
+              placeholder="想传到另一台设备的内容"
+              required
+            ></textarea
+            ><button>发送文字</button>
+          </form>
+          <label for="file">文件或图片</label
+          ><input id="file" type="file" /><button id="sendFile">
+            发送文件
+          </button>
+          <p id="upload" class="muted"></p>
+          <button id="requestOpen" class="secondary">
+            请求这台设备打开网页
+          </button>
+        </article>
+        <article>
+          <h2>传输状态</h2>
+          <div id="jobs"></div>
+        </article>
+      </section>
+      <section>
+        <h2>收到的内容与请求</h2>
+        <div id="items"></div>
+      </section>
+      <details>
+        <summary>连接日志</summary>
+        <button id="refreshLogs" class="secondary">刷新日志</button>
+        <pre id="logs"></pre>
+      </details>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

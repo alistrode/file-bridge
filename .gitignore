@@ -13,3 +13,5 @@ source/file-bridge.lock
 .env.*
 *.pem
 *.key
+.file-bridge-v2/
+*.runtime.json
