@@ -1,0 +1,79 @@
+{
+  "source": "G:/Downloads/Codex-Mini-main/Codex-Mini-main/file-bridge",
+  "files": [
+    {
+      "path": "capture_win10.py",
+      "bytes": 1607,
+      "sha256": "7433d913997602dbbfbe9a2e18623653d6539aa4887608a3e78984e1ebfb28d5",
+      "uploaded_sha256": "db0f9c092f40d0e915efe0095227da6d4e1991f90de0ba63c716b6eba3a56988",
+      "unchanged": false
+    },
+    {
+      "path": "package.json",
+      "bytes": 267,
+      "sha256": "805d40897b0d407ec4304671323fda0b35dd5f32e130aed352eea2ba8ded02a6",
+      "uploaded_sha256": "805d40897b0d407ec4304671323fda0b35dd5f32e130aed352eea2ba8ded02a6",
+      "unchanged": true
+    },
+    {
+      "path": "public/app.js",
+      "bytes": 4373,
+      "sha256": "8d423d1f6107224f7e3d0a1dda8a1ee3113c368f80c07f6b02c4cc66766defb5",
+      "uploaded_sha256": "8d423d1f6107224f7e3d0a1dda8a1ee3113c368f80c07f6b02c4cc66766defb5",
+      "unchanged": true
+    },
+    {
+      "path": "public/index.html",
+      "bytes": 2138,
+      "sha256": "33c3d9fffef66b72edb1b818ac2447c26288d62e9346993e201637a870dcb290",
+      "uploaded_sha256": "33c3d9fffef66b72edb1b818ac2447c26288d62e9346993e201637a870dcb290",
+      "unchanged": true
+    },
+    {
+      "path": "README.md",
+      "bytes": 605,
+      "sha256": "8ef0659863ecec1c2cf7937f51384aeb9f8a842ac18ee8e3a4e16eba4a03bdc2",
+      "uploaded_sha256": "8ef0659863ecec1c2cf7937f51384aeb9f8a842ac18ee8e3a4e16eba4a03bdc2",
+      "unchanged": true
+    },
+    {
+      "path": "server.js",
+      "bytes": 9624,
+      "sha256": "4d2871e1f113387fed4a90e83b54e4f963e535fc59c07317e214aa15b668cff5",
+      "uploaded_sha256": "4d2871e1f113387fed4a90e83b54e4f963e535fc59c07317e214aa15b668cff5",
+      "unchanged": true
+    },
+    {
+      "path": "start-hidden.vbs",
+      "bytes": 370,
+      "sha256": "d65deb0d1ff0726995f17390c09651644678f2d59b84bdeae45a78126e1a5128",
+      "uploaded_sha256": "d65deb0d1ff0726995f17390c09651644678f2d59b84bdeae45a78126e1a5128",
+      "unchanged": true
+    },
+    {
+      "path": "start-remote.ps1",
+      "bytes": 3580,
+      "sha256": "3ca6588f5054f1e70ce07df3faaba36a4df67bca350b4bf66a12a60d616c8ff3",
+      "uploaded_sha256": "3ca6588f5054f1e70ce07df3faaba36a4df67bca350b4bf66a12a60d616c8ff3",
+      "unchanged": true
+    },
+    {
+      "path": "test-persistence.js",
+      "bytes": 1302,
+      "sha256": "1d6a4ae51223033dd79d0b272174c16b7108e21a49e5367f3521c9b74c7549d6",
+      "uploaded_sha256": "1d6a4ae51223033dd79d0b272174c16b7108e21a49e5367f3521c9b74c7549d6",
+      "unchanged": true
+    }
+  ],
+  "excluded": [
+    "data/ (tokens and state)",
+    "received/ (user files)",
+    "archive/ (user archives)",
+    "artifacts/ (screenshots)",
+    "current-url.txt (private URL)"
+  ],
+  "changes": {
+    "capture_win10.py": "Replace historical hardcoded access URL credential with required FILE_BRIDGE_TEST_URL environment variable."
+  },
+  "provenance": "Read from B host through SSH with supplied fingerprint and Administrator account verified. No Git metadata in source or parent project. File Bridge original author/license not confirmed."
+}

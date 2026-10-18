@@ -1,0 +1,24 @@
+{
+  "platform": "linux",
+  "node": "v24.19.0",
+  "checks": [
+    "syntax: server.js",
+    "syntax: public/app.js",
+    "syntax: test-persistence.js",
+    "existing persistence and archive test",
+    "unauthenticated API returns 401",
+    "page and JavaScript return 200",
+    "64 KiB binary upload/download byte match",
+    "UTF-8 text transfer",
+    "archived file download byte match",
+    "text and file survive server restart"
+  ],
+  "passed": true,
+  "checked_at": "2026-10-18T17:54:01.525Z",
+  "not_tested": [
+    "Windows native launch and screenshot",
+    "Cloudflare public tunnel",
+    "physical phone/browser UI",
+    "1 GiB file transfer"
+  ]
+}

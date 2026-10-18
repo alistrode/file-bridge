@@ -1,0 +1,15 @@
+node_modules/
+__pycache__/
+*.pyc
+source/data/
+source/received/
+source/archive/
+source/artifacts/
+source/private/
+source/current-url.txt
+source/file-bridge.lock
+*.log
+.env
+.env.*
+*.pem
+*.key
