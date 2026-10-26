@@ -1,11 +1,12 @@
 {
-  "name": "file-bridge",
-  "version": "1.0.0",
+  "name": "file-bridge-web",
+  "version": "3.0.0",
   "private": true,
-  "description": "Phone-to-computer text, image, and file transfer bridge",
+  "description": "Single-host shared web application",
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js"
+    "start": "node server.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=22"
+  }
 }

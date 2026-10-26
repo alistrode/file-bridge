@@ -1,14 +1,6 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal
 cd /d "%~dp0"
-if exist "runtime\FileBridge.exe" (
-  set ELECTRON_RUN_AS_NODE=1
-  "%~dp0runtime\FileBridge.exe" "%~dp0source\bridge\cli.cjs" %*
-  exit /b !errorlevel!
-)
-if exist "runtime\electron.exe" (
-  set ELECTRON_RUN_AS_NODE=1
-  "%~dp0runtime\electron.exe" "%~dp0source\bridge\cli.cjs" %*
-  exit /b !errorlevel!
-)
-node source\bridge\cli.cjs %*
+set "FB_NODE=%~dp0runtime\node.exe"
+if not exist "%FB_NODE%" set "FB_NODE=node"
+"%FB_NODE%" source\host\cli.cjs %*

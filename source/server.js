@@ -1,153 +1,577 @@
-#!/usr/bin/env node
-'use strict';
-
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { URL } = require('url');
-const mimeTypes = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.pdf':'application/pdf'};
-
-const PORT = Number(process.env.PORT || 8790);
-const HOST = process.env.HOST || '0.0.0.0';
-const ROOT = __dirname;
-const PUBLIC = path.join(ROOT, 'public');
-const STORAGE = process.env.FILE_BRIDGE_STORAGE || path.join(ROOT, 'received');
-const DATA_DIR = path.join(ROOT, 'data');
-const TOKEN_FILE = path.join(DATA_DIR, 'token.txt');
-const STATE_FILE = path.join(DATA_DIR, 'items.json');
-const ARCHIVE_DIR = path.join(ROOT, 'archive');
-const ARCHIVE_FILES = path.join(ARCHIVE_DIR, 'files');
-const ARCHIVE_STATE_FILE = path.join(ARCHIVE_DIR, 'items.json');
-const MAX_FILE_BYTES = 1024 * 1024 * 1024;
-const MAX_TEXT_BYTES = 1024 * 1024;
-const KEEP_FOR_MS = 24 * 60 * 60 * 1000;
-let recent = [];
-let archived = [];
-fs.mkdirSync(STORAGE, { recursive: true });
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(ARCHIVE_FILES, { recursive: true });
-let TOKEN = process.env.FILE_BRIDGE_TOKEN;
-if (!TOKEN) {
-  try { TOKEN = fs.readFileSync(TOKEN_FILE, 'utf8').trim(); } catch {}
+"use strict";
+const http = require("node:http"),
+  fs = require("node:fs"),
+  fsp = require("node:fs/promises"),
+  path = require("node:path"),
+  crypto = require("node:crypto");
+const {
+  directory,
+  load,
+  atomic,
+  save,
+  syncDirectory,
+  logger,
+} = require("./host/storage.cjs");
+const ROOT = __dirname,
+  CHUNK = 1024 * 1024,
+  MAX_FILE = 1024 * 1024 * 1024,
+  DAY = 86400000;
+const data = directory(
+  path.resolve(process.env.FILE_BRIDGE_DATA_DIR || path.join(ROOT, "data")),
+);
+const received = directory(
+  process.env.FILE_BRIDGE_STORAGE || path.join(data, "received"),
+);
+const archive = directory(path.join(data, "archive")),
+  uploads = directory(path.join(data, "uploads"));
+const log = logger(path.join(data, "logs")),
+  itemsFile = path.join(data, "items.json"),
+  archiveFile = path.join(archive, "items.json");
+const tokenFile = path.join(data, "token.txt");
+let token = process.env.FILE_BRIDGE_TOKEN;
+if (!token) {
+  try {
+    token = fs.readFileSync(tokenFile, "utf8").trim();
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
 }
-if (!TOKEN) {
-  TOKEN = crypto.randomBytes(18).toString('base64url');
-  fs.writeFileSync(TOKEN_FILE, TOKEN, 'utf8');
+if (!token) {
+  token = crypto.randomBytes(32).toString("hex");
+  atomic(tokenFile, token);
 }
-
-function loadJson(file) { try { const value = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(value) ? value : []; } catch { return []; } }
-function saveJson(file, value) { const temp = `${file}.tmp`; fs.writeFileSync(temp, JSON.stringify(value, null, 2), 'utf8'); fs.renameSync(temp, file); }
-function pruneAndSave() {
-  const cutoff = Date.now() - KEEP_FOR_MS;
-  const expired = recent.filter(item => item.createdAt < cutoff);
-  for (const item of expired) {
-    if (item.kind !== 'text' && item.download) {
-      const name = safeName(decodeURIComponent(item.download.slice('/api/download/'.length)));
-      const target = path.join(STORAGE, name);
-      if (target.startsWith(STORAGE + path.sep)) fs.rmSync(target, { force: true });
+// Preserve the original direct-server files; supervised profiles are separate stores.
+if (!process.env.FILE_BRIDGE_DATA_DIR) {
+  for (const [from, to] of [
+    [path.join(ROOT, "received"), received],
+    [path.join(ROOT, "archive/files"), archive],
+  ])
+    if (fs.existsSync(from))
+      for (const f of fs.readdirSync(from)) {
+        const src = path.join(from, f),
+          dst = path.join(to, f);
+        if (fs.lstatSync(src).isFile() && !fs.existsSync(dst))
+          fs.copyFileSync(src, dst);
+      }
+  if (
+    !fs.existsSync(archiveFile) &&
+    fs.existsSync(path.join(ROOT, "archive/items.json"))
+  )
+    save(archiveFile, load(path.join(ROOT, "archive/items.json"), []));
+}
+let items = load(itemsFile, []),
+  archived = load(archiveFile, []);
+const busy = new Set();
+const pendingArchives = new Map();
+const hash = (b) => crypto.createHash("sha256").update(b).digest("hex");
+const uuid = (s) =>
+  typeof s === "string" &&
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(s);
+const name = (s) => {
+  const clean = path
+    .basename(String(s || "file.bin"))
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
+  let result = "";
+  for (const char of clean) {
+    if (Buffer.byteLength(result + char) > 170) break;
+    result += char;
+  }
+  return result || "file.bin";
+};
+const fail = (status, message) => Object.assign(Error(message), { status });
+function record(item) {
+  const existing = items.find((x) => x.id === item.id);
+  if (existing) return existing;
+  const next = [item, ...items];
+  save(itemsFile, next);
+  items = next;
+  return item;
+}
+function clean() {
+  const cutoff = Date.now() - DAY;
+  const expired = items.filter((i) => i.createdAt < cutoff);
+  items = items.filter((i) => i.createdAt >= cutoff);
+  save(itemsFile, items);
+  for (const i of expired)
+    if (i.download) {
+      const f = path.basename(decodeURIComponent(i.download.split("/").at(-1)));
+      fs.rmSync(path.join(received, f), { force: true });
+    }
+  for (const id of fs.readdirSync(uploads)) {
+    if (!uuid(id)) continue;
+    const dir = path.join(uploads, id),
+      m = load(path.join(dir, "job.json"), null);
+    if (m && Date.now() - m.updatedAt > 7 * DAY)
+      fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+clean();
+const cleanup = setInterval(() => {
+  try {
+    clean();
+  } catch (e) {
+    log("cleanup_failed", { reason: e.code || "storage" });
+  }
+}, 3600000);
+cleanup.unref();
+function job(id) {
+  if (!uuid(id)) throw fail(400, "上传编号无效");
+  const dir = path.join(uploads, id),
+    m = load(path.join(dir, "job.json"), null);
+  if (!m) throw fail(404, "上传记录已过期，请重新发送");
+  return { dir, m };
+}
+async function snapshot(id) {
+  const { dir, m } = job(id);
+  const present = [];
+  const item = items.find((x) => x.id === m.id) || null;
+  if (
+    m.state === "completed" &&
+    item &&
+    fs.existsSync(path.join(received, m.target))
+  )
+    return { id: m.id, state: m.state, chunkBytes: CHUNK, present, item };
+  for (let i = 0; i < m.blocks.length; i++) {
+    try {
+      const bytes = await fsp.readFile(path.join(dir, String(i)));
+      if (
+        bytes.length === Math.min(CHUNK, m.size - i * CHUNK) &&
+        hash(bytes) === m.blocks[i]
+      )
+        present.push(i);
+    } catch (e) {
+      if (e.code !== "ENOENT") throw e;
     }
   }
-  recent = recent.filter(item => item.createdAt >= cutoff);
-  saveJson(STATE_FILE, recent);
+  return { id: m.id, state: "uploading", chunkBytes: CHUNK, present, item };
 }
-recent = loadJson(STATE_FILE); archived = loadJson(ARCHIVE_STATE_FILE); pruneAndSave();
-// Remove orphaned unarchived files older than the one-day retention window.
-const activeFiles = new Set(recent.filter(item => item.download).map(item => safeName(decodeURIComponent(item.download.slice('/api/download/'.length)))));
-for (const file of fs.readdirSync(STORAGE)) {
-  const target = path.join(STORAGE, file);
-  if (!activeFiles.has(file) && fs.statSync(target).isFile() && fs.statSync(target).mtimeMs < Date.now() - KEEP_FOR_MS) fs.rmSync(target, { force: true });
+function auth(req, u) {
+  const values = [
+    req.headers["x-file-bridge-token"],
+    u.searchParams.get("token"),
+  ];
+  const cookie = req.headers.cookie?.match(
+    /(?:^|; )fileBridgeToken=([^;]+)/,
+  )?.[1];
+  if (cookie) {
+    try {
+      values.push(decodeURIComponent(cookie));
+    } catch {}
+  }
+  return values.some(
+    (v) =>
+      typeof v === "string" &&
+      Buffer.byteLength(v) === Buffer.byteLength(token) &&
+      crypto.timingSafeEqual(Buffer.from(v), Buffer.from(token)),
+  );
 }
-
-function authorized(req, url) {
-  return req.headers['x-file-bridge-token'] === TOKEN || url.searchParams.get('token') === TOKEN;
+function json(res, status, value) {
+  if (res.destroyed) return;
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  res.end(JSON.stringify(value));
 }
-function json(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(JSON.stringify(body));
+async function body(req, limit) {
+  const chunks = [];
+  let size = 0;
+  for await (const b of req) {
+    size += b.length;
+    if (size > limit) throw fail(413, "内容超过大小限制");
+    chunks.push(b);
+  }
+  return Buffer.concat(chunks);
 }
-function safeName(name) {
-  const base = path.basename(String(name || 'upload.bin')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
-  return base || 'upload.bin';
+async function object(req) {
+  try {
+    return JSON.parse((await body(req, 6500000)).toString());
+  } catch (e) {
+    if (e.status) throw e;
+    throw fail(400, "请求格式无效");
+  }
 }
-function uniquePath(name) {
-  const ext = path.extname(name); const stem = path.basename(name, ext);
-  let candidate = path.join(STORAGE, name); let number = 1;
-  while (fs.existsSync(candidate)) candidate = path.join(STORAGE, `${stem} (${number++})${ext}`);
-  return candidate;
+async function locked(id, fn) {
+  if (busy.has(id)) throw fail(409, "任务正在处理，请稍后重试");
+  busy.add(id);
+  try {
+    return await fn();
+  } finally {
+    busy.delete(id);
+  }
 }
-function record(item) { recent.unshift(item); pruneAndSave(); }
-function byId(id) { return recent.find(item => item.id === id); }
-function serveStatic(res, file, type) {
-  fs.readFile(file, (err, body) => {
-    if (err) return json(res, 404, { error: 'Not found' });
-    res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' }); res.end(body);
+async function complete(id) {
+  return locked(id, async () => {
+    const { dir, m } = job(id);
+    const previous = items.find((x) => x.id === id);
+    const expectedTarget = m.target || id + "-" + name(m.name);
+    if (
+      previous &&
+      (previous.kind === "text" ||
+        previous.download !==
+          "/api/download/" + encodeURIComponent(expectedTarget) ||
+        previous.size !== m.size)
+    )
+      throw fail(409, "任务编号已用于其他内容");
+    if (
+      m.state === "completed" &&
+      previous &&
+      fs.existsSync(path.join(received, m.target))
+    )
+      return previous;
+    const target = m.target || id + "-" + name(m.name),
+      temp = path.join(received, target + ".part"),
+      out = await fsp.open(temp, "w", 0o600),
+      full = crypto.createHash("sha256");
+    try {
+      for (let i = 0; i < m.blocks.length; i++) {
+        let bytes;
+        try {
+          bytes = await fsp.readFile(path.join(dir, String(i)));
+        } catch (e) {
+          if (e.code === "ENOENT") throw fail(409, "分块尚未上传完整");
+          throw e;
+        }
+        if (
+          bytes.length !== Math.min(CHUNK, m.size - i * CHUNK) ||
+          hash(bytes) !== m.blocks[i]
+        )
+          throw fail(409, "分块校验失败，请继续上传");
+        full.update(bytes);
+        let offset = 0;
+        while (offset < bytes.length) {
+          const r = await out.write(bytes, offset, bytes.length - offset);
+          offset += r.bytesWritten;
+        }
+      }
+      await out.sync();
+    } finally {
+      await out.close();
+    }
+    if ((await fsp.stat(temp)).size !== m.size)
+      throw fail(409, "文件长度校验失败");
+    const digest = full.digest("hex");
+    m.target = target;
+    m.digest = digest;
+    m.updatedAt = Date.now();
+    save(path.join(dir, "job.json"), m);
+    await fsp.rename(temp, path.join(received, target));
+    syncDirectory(received);
+    const item = record({
+      id,
+      kind: m.mime.startsWith("image/") ? "image" : "file",
+      name: m.name,
+      size: m.size,
+      mime: m.mime,
+      digest,
+      verified: true,
+      createdAt: Date.now(),
+      download: "/api/download/" + encodeURIComponent(target),
+    });
+    m.state = "completed";
+    save(path.join(dir, "job.json"), m);
+    log("upload_saved", { bytes: m.size });
+    return item;
   });
 }
-
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  if (req.method === 'GET' && url.pathname === '/') {
-    if (!authorized(req, url)) return json(res, 401, { error: '访问令牌不正确。请使用完整链接。' });
-    res.setHeader('set-cookie', `fileBridgeToken=${encodeURIComponent(TOKEN)}; Path=/; SameSite=Lax; Max-Age=604800`);
-    return serveStatic(res, path.join(PUBLIC, 'index.html'), 'text/html; charset=utf-8');
-  }
-  if (req.method === 'GET' && url.pathname === '/app.js') return serveStatic(res, path.join(PUBLIC, 'app.js'), 'text/javascript; charset=utf-8');
-  if (req.method === 'GET' && url.pathname === '/api/items') {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    return json(res, 200, { items: recent });
-  }
-  if (req.method === 'POST' && url.pathname.startsWith('/api/archive/')) {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    const id = decodeURIComponent(url.pathname.slice('/api/archive/'.length));
-    const item = byId(id);
-    if (!item) return json(res, 404, { error: 'Item not found or expired.' });
-    const archivedItem = { ...item, archivedAt: Date.now() };
-    if (item.kind !== 'text') {
-      const sourceName = path.basename(decodeURIComponent(item.download.slice('/api/download/'.length)));
-      const source = path.join(STORAGE, sourceName);
-      const archivedName = `${item.id}-${sourceName}`;
-      const destination = path.join(ARCHIVE_FILES, archivedName);
-      if (!fs.existsSync(source)) return json(res, 404, { error: 'Source file is missing.' });
-      if (!fs.existsSync(destination)) fs.copyFileSync(source, destination);
-      archivedItem.download = `/api/archive-download/${encodeURIComponent(archivedName)}`;
+function archiveItem(id) {
+  if (pendingArchives.has(id)) return pendingArchives.get(id);
+  const operation = (async () => {
+    const item = items.find((i) => i.id === id);
+    if (!item) throw fail(404, "内容已过期");
+    if (archived.some((i) => i.id === id)) return;
+    const copy = { ...item, archivedAt: Date.now() };
+    if (item.download) {
+      const src = path.join(
+          received,
+          path.basename(decodeURIComponent(item.download.split("/").at(-1))),
+        ),
+        dst = path.join(archive, path.basename(src));
+      await fsp.copyFile(src, dst);
+      const h = await fsp.open(dst, "r+");
+      try {
+        await h.sync();
+      } finally {
+        await h.close();
+      }
+      syncDirectory(archive);
+      copy.download =
+        "/api/archive-download/" + encodeURIComponent(path.basename(dst));
     }
-    archived = archived.filter(row => row.id !== id); archived.unshift(archivedItem); saveJson(ARCHIVE_STATE_FILE, archived);
+    const next = [copy, ...archived];
+    save(archiveFile, next);
+    archived = next;
+  })().finally(() => pendingArchives.delete(id));
+  pendingArchives.set(id, operation);
+  return operation;
+}
+async function serve(req, res) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  );
+  const u = new URL(req.url, "http://localhost");
+  if (req.method === "GET" && u.pathname === "/health")
+    return json(res, 200, { ok: true });
+  if (!auth(req, u))
+    return json(res, 401, { error: "请使用主机提供的完整网址打开网页" });
+  if (
+    !["GET", "HEAD"].includes(req.method) &&
+    req.headers["x-file-bridge-request"] !== "1"
+  )
+    throw fail(403, "请求校验失败");
+  if (
+    req.method === "GET" &&
+    ["/", "/app.js", "/style.css"].includes(u.pathname)
+  ) {
+    if (u.pathname === "/")
+      res.setHeader(
+        "Set-Cookie",
+        "fileBridgeToken=" +
+          encodeURIComponent(token) +
+          "; HttpOnly; SameSite=Strict; Path=/" +
+          (req.headers["x-forwarded-proto"] === "https" ? "; Secure" : ""),
+      );
+    const file = u.pathname === "/" ? "index.html" : u.pathname.slice(1);
+    res.writeHead(200, {
+      "Content-Type": file.endsWith(".js")
+        ? "text/javascript"
+        : file.endsWith(".css")
+          ? "text/css"
+          : "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    return res.end(await fsp.readFile(path.join(ROOT, "public", file)));
+  }
+  if (req.method === "GET" && u.pathname === "/api/items") {
+    const saved = new Set(archived.map((i) => i.id));
+    return json(res, 200, {
+      items: items.map((item) => ({ ...item, archived: saved.has(item.id) })),
+    });
+  }
+  if (req.method === "POST" && u.pathname === "/api/text") {
+    const v = await object(req);
+    if (
+      !uuid(v.id) ||
+      typeof v.text !== "string" ||
+      !v.text.trim() ||
+      Buffer.byteLength(v.text) > 1024 * 1024
+    )
+      throw fail(400, "文字内容或任务编号无效");
+    const old = items.find((i) => i.id === v.id);
+    if (old && (old.kind !== "text" || old.text !== v.text.trim()))
+      throw fail(409, "任务编号已用于其他内容");
+    return json(res, 201, {
+      ok: true,
+      item: record({
+        id: v.id,
+        kind: "text",
+        text: v.text.trim(),
+        createdAt: Date.now(),
+      }),
+    });
+  }
+  if (req.method === "POST" && u.pathname === "/api/uploads") {
+    const v = await object(req);
+    if (
+      !uuid(v.id) ||
+      !Number.isSafeInteger(v.size) ||
+      v.size < 0 ||
+      v.size > MAX_FILE ||
+      typeof v.name !== "string" ||
+      !Array.isArray(v.blocks) ||
+      v.blocks.length !== Math.ceil(v.size / CHUNK) ||
+      !v.blocks.every((x) => /^[a-f0-9]{64}$/.test(x)) ||
+      hash(v.blocks.join("")) !== v.manifest
+    )
+      throw fail(400, "文件清单无效或文件超过 1 GB");
+    const occupied = items.find((i) => i.id === v.id);
+    if (
+      occupied &&
+      (occupied.kind === "text" ||
+        !fs.existsSync(path.join(uploads, v.id, "job.json")))
+    )
+      throw fail(409, "任务编号已用于其他内容");
+    let canonical = v.id;
+    for (const candidate of fs.readdirSync(uploads)) {
+      if (!uuid(candidate)) continue;
+      const other = load(path.join(uploads, candidate, "job.json"), null);
+      if (
+        other &&
+        other.manifest === v.manifest &&
+        other.size === v.size &&
+        other.name === name(v.name) &&
+        other.mime ===
+          String(v.mime || "application/octet-stream").slice(0, 100) &&
+        (other.state !== "completed" || items.some((x) => x.id === candidate))
+      ) {
+        canonical = candidate;
+        break;
+      }
+    }
+    return locked(canonical, async () => {
+      const dir = directory(path.join(uploads, canonical)),
+        old = load(path.join(dir, "job.json"), null);
+      if (
+        old &&
+        (old.manifest !== v.manifest ||
+          old.size !== v.size ||
+          old.name !== name(v.name) ||
+          old.mime !==
+            String(v.mime || "application/octet-stream").slice(0, 100))
+      )
+        throw fail(409, "任务编号对应的文件已改变");
+      if (!old)
+        save(path.join(dir, "job.json"), {
+          id: canonical,
+          name: name(v.name),
+          size: v.size,
+          mime: String(v.mime || "application/octet-stream").slice(0, 100),
+          blocks: v.blocks,
+          manifest: v.manifest,
+          state: "uploading",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      else {
+        old.updatedAt = Date.now();
+        save(path.join(dir, "job.json"), old);
+      }
+      return json(res, 200, await snapshot(canonical));
+    });
+  }
+  const match = u.pathname.match(
+    /^\/api\/uploads\/([^/]+)(?:\/(chunks)\/(\d+)|\/(complete))?$/,
+  );
+  if (match) {
+    const id = match[1];
+    if (req.method === "GET" && !match[2] && !match[4])
+      return json(res, 200, await snapshot(id));
+    if (req.method === "PUT" && match[2])
+      return locked(id, async () => {
+        const { dir, m } = job(id),
+          i = Number(match[3]);
+        if (!Number.isSafeInteger(i) || i < 0 || i >= m.blocks.length)
+          throw fail(400, "分块编号无效");
+        const bytes = await body(req, CHUNK);
+        if (
+          bytes.length !== Math.min(CHUNK, m.size - i * CHUNK) ||
+          hash(bytes) !== m.blocks[i]
+        )
+          throw fail(422, "文件分块校验失败");
+        atomic(path.join(dir, String(i)), bytes);
+        m.updatedAt = Date.now();
+        save(path.join(dir, "job.json"), m);
+        return json(res, 200, { saved: true, index: i });
+      });
+    if (req.method === "POST" && match[4])
+      return json(res, 201, { saved: true, item: await complete(id) });
+  }
+  if (req.method === "POST" && u.pathname.startsWith("/api/archive/")) {
+    await archiveItem(u.pathname.slice("/api/archive/".length));
     return json(res, 201, { ok: true });
   }
-  if (req.method === 'POST' && url.pathname === '/api/text') {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    let size = 0; const chunks = [];
-    req.on('data', chunk => { size += chunk.length; if (size <= MAX_TEXT_BYTES) chunks.push(chunk); else req.destroy(); });
-    req.on('end', () => { if (size > MAX_TEXT_BYTES) return json(res, 413, { error: '文本超过 1 MB。' }); const text = Buffer.concat(chunks).toString('utf8').trim(); if (!text) return json(res, 400, { error: '内容为空。' }); record({ id: crypto.randomUUID(), kind: 'text', text, createdAt: Date.now() }); json(res, 201, { ok: true }); });
-    return;
+  if (req.method === "GET" && u.pathname === "/api/archives")
+    return json(res, 200, { items: archived });
+  if (
+    req.method === "GET" &&
+    /^\/api\/(download|archive-download|preview)\//.test(u.pathname)
+  ) {
+    const parts = u.pathname.split("/"),
+      kind = parts[2],
+      file = decodeURIComponent(parts.slice(3).join("/"));
+    if (file !== path.basename(file) || file === "." || file === "..")
+      throw fail(400, "文件名无效");
+    const list = kind === "archive-download" ? archived : items,
+      item = list.find(
+        (i) =>
+          i.download &&
+          decodeURIComponent(i.download.split("/").at(-1)) === file,
+      );
+    if (!item) throw fail(404, "文件不存在或已过期");
+    const target = path.join(
+      kind === "archive-download" ? archive : received,
+      file,
+    );
+    let stat;
+    try {
+      stat = await fsp.stat(target);
+    } catch (e) {
+      if (e.code === "ENOENT") throw fail(404, "文件不存在");
+      throw e;
+    }
+    const preview = kind === "preview";
+    if (preview && !/^image\/(png|jpeg|gif|webp)$/.test(item.mime))
+      throw fail(415, "此格式请下载查看");
+    const headers = {
+      "Content-Type": preview ? item.mime : "application/octet-stream",
+      "Content-Disposition":
+        (preview ? "inline" : "attachment") +
+        "; filename*=UTF-8''" +
+        encodeURIComponent(item.name || file),
+      "Content-Length": stat.size,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, no-store",
+    };
+    let start = 0,
+      end = stat.size - 1,
+      status = 200;
+    if (req.headers.range) {
+      const r = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range);
+      if (!r || Number(r[1]) >= stat.size) {
+        res.writeHead(416, { "Content-Range": "bytes */" + stat.size });
+        return res.end();
+      }
+      start = Number(r[1]);
+      end = r[2] ? Math.min(Number(r[2]), end) : end;
+      if (end < start) {
+        res.writeHead(416, { "Content-Range": "bytes */" + stat.size });
+        return res.end();
+      }
+      status = 206;
+      headers["Content-Length"] = end - start + 1;
+      headers["Content-Range"] = `bytes ${start}-${end}/${stat.size}`;
+    }
+    res.writeHead(status, headers);
+    if (!stat.size) return res.end();
+    const stream = fs.createReadStream(target, { start, end });
+    stream.on("error", () => res.destroy());
+    res.on("close", () => stream.destroy());
+    return stream.pipe(res);
   }
-  if (req.method === 'POST' && url.pathname === '/api/file') {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    const declared = Number(req.headers['content-length'] || 0);
-    if (declared > MAX_FILE_BYTES) return json(res, 413, { error: '文件不能超过 1 GB。' });
-    const fileName = safeName(decodeURIComponent(req.headers['x-file-name'] || 'upload.bin'));
-    const target = uniquePath(fileName); const output = fs.createWriteStream(target, { flags: 'wx' }); let size = 0; let done = false;
-    const fail = (status, message) => { if (done) return; done = true; output.destroy(); fs.rm(target, { force: true }, () => json(res, status, { error: message })); };
-    req.on('data', chunk => { size += chunk.length; if (size > MAX_FILE_BYTES) { req.destroy(); fail(413, '文件不能超过 1 GB。'); } });
-    req.on('aborted', () => fail(400, '上传被取消。'));
-    output.on('error', () => fail(500, '无法写入接收目录。'));
-    output.on('finish', () => { if (done) return; done = true; const item = { id: crypto.randomUUID(), kind: (req.headers['content-type'] || '').startsWith('image/') ? 'image' : 'file', name: fileName, size, mime: req.headers['content-type'] || 'application/octet-stream', createdAt: Date.now(), download: `/api/download/${encodeURIComponent(path.basename(target))}` }; record(item); json(res, 201, { ok: true, item }); });
-    req.pipe(output); return;
-  }
-  if (req.method === 'GET' && url.pathname.startsWith('/api/download/')) {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    const name = safeName(decodeURIComponent(url.pathname.slice('/api/download/'.length))); const target = path.join(STORAGE, name);
-    if (!target.startsWith(STORAGE + path.sep) || !fs.existsSync(target)) return json(res, 404, { error: 'Not found' });
-    res.writeHead(200, { 'content-type': mimeTypes[path.extname(name).toLowerCase()] || 'application/octet-stream', 'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(name)}` }); fs.createReadStream(target).pipe(res); return;
-  }
-  if (req.method === 'GET' && url.pathname.startsWith('/api/archive-download/')) {
-    if (!authorized(req, url)) return json(res, 401, { error: 'Unauthorized' });
-    const name = safeName(decodeURIComponent(url.pathname.slice('/api/archive-download/'.length)));
-    const target = path.join(ARCHIVE_FILES, name);
-    if (!target.startsWith(ARCHIVE_FILES + path.sep) || !fs.existsSync(target)) return json(res, 404, { error: 'Not found' });
-    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` }); fs.createReadStream(target).pipe(res); return;
-  }
-  json(res, 404, { error: 'Not found' });
+  throw fail(404, "接口不存在");
+}
+const server = http.createServer((req, res) => {
+  serve(req, res).catch((e) => {
+    if (!e.status) log("request_failed", { reason: e.code || "internal" });
+    if (res.headersSent) return res.destroy();
+    json(res, e.status || 500, {
+      error: e.status ? e.message : "保存失败，请稍后重试",
+    });
+  });
 });
-server.listen(PORT, HOST, () => console.log(`File Bridge running: http://localhost:${PORT}/?token=${TOKEN}`));
+server.requestTimeout = 120000;
+server.headersTimeout = 15000;
+server.listen(
+  Number(process.env.PORT ?? 8790),
+  process.env.HOST || "127.0.0.1",
+  () => {
+    const port = server.address().port;
+    log("web_ready", { port });
+    if (process.send) process.send({ type: "ready", port, token });
+    else
+      console.log(
+        "File Bridge website ready on port " +
+          port +
+          "; private entry is stored in the data directory.",
+      );
+  },
+);
+for (const signal of ["SIGTERM", "SIGINT"])
+  process.on(signal, () => {
+    clearInterval(cleanup);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  });

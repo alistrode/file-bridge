@@ -1,39 +1,62 @@
-# File Bridge 2.0
+# File Bridge 3.0
 
-分支：`projects/file-bridge`。手机/电脑文件网页项目的独立双端升级版：一次配对记住设备，互发文字、图片和文件，并可以请求另一台打开网页。两端功能完全相同。
+一个主机运行网站并连接 Cloudflare 隧道。手机和电脑打开同一个完整网址，即可互传文字、图片和最大 1 GB 的文件。浏览器无需安装客户端，也没有设备配对、设备列表或双端连接。
 
-## 一键启动与开发
+## 主机启动
 
-- Windows：双击 `Start-File-Bridge.cmd`。
+需要 Node.js 22+ 和官方 `cloudflared`；应用没有 npm 运行依赖。也可以把相应平台的二进制放入根目录 `runtime/`，Windows 命名为 `node.exe`、`cloudflared.exe`，Linux 命名为 `node`、`cloudflared`。第三方运行时应保留各自许可证。
+
+- Windows：运行 `Start-File-Bridge.cmd`。
 - Linux：运行 `./Start-File-Bridge.sh`。
-- 源码模式需要 Node.js 22+，首次运行自动安装锁定依赖和校验后的 Electron；之后直接启动，不编译 Chromium 或应用源码。
-- 完整运行包内置官方 Electron 和生产依赖，解压保留整个文件夹后使用同名脚本启动。
-- 无桌面云端：`node scripts/start-dev.cjs --headless --profile-dir /private/file-bridge`。
-- 独立调试：一键脚本后加 `--profile-dir <独立目录>`。不会占用旧版端口或信道。
+- 当前公网入口保存在 `var/current-url.txt`；生成网址需要等待隧道连接。
+- 查看状态：`node source/host/cli.cjs status`。
+- 打开网页：`node source/host/cli.cjs open`。
+- 明确停止：`node source/host/cli.cjs stop`，停止后不会被再次拉起。
+- 主机登录后自动启动：`node source/host/cli.cjs autostart on`；关闭用 `autostart off`。在实际登录用户的会话中设置。它只启动主机后台，不要求访问网页的人设置任何东西。
 
-启动后托盘点击打开应用自带的网页窗口。在任意一端生成配对码，在另一端输入即可记住设备。网页关闭后连接继续；托盘菜单可打开日志、单独退出托盘或停止本实例。
-
-网页可分别设置“登录电脑后启动”和“自动启动时打开网页”。Windows 在登录当前账户后显示托盘，不擅自安装系统服务。远程打开网页请求默认需要接收方确认，只有明确开启某台设备的自动打开权限后才自动执行。
-
-## 稳定性与数据
-
-- 连续失败按 1、2、3……秒增加等待，稳定后复位，持续自动连接同一已配对身份。
-- 两个独立公共 WSS 中继同时工作；任务落盘，接收确认、文件分块检查点和 SHA-256 校验避免把“发送给中继”误当成完成。
-- 默认状态：`~/.file-bridge-v2`。收到的文件、配对身份、日志和发送队列都在对应 profile；不要删除该目录来处理普通掉线。
-- 文字上限 64 KiB，单文件上限 1 GiB。两端需要运行此版本。原有 1.0 公网网页及 Cloudflare 脚本仍位于 `source/` 根目录，新程序位于 `source/bridge/`。
-
-设计、隔离边界和可用性范围见 [设计说明](docs/DESIGN.md)，验证结果见 `docs/` 下的验证记录。不能把公共免费中继的可用性变成“永不断线”承诺。
-
-## 开发、测试与快速打包
+首次配置使用临时隧道：
 
 ```sh
-npm ci --ignore-scripts
-npm test
-npm run test:public
-node scripts/download-runtime.cjs --platform linux --out /absolute/verified-runtime
-node scripts/package.cjs --platform linux --runtime /absolute/verified-runtime --out /absolute/new-package-folder
+node source/host/cli.cjs start --profile-dir /absolute/host-state --port 8790 --tunnel quick --cloudflared /absolute/cloudflared
 ```
 
-Windows 使用 `--platform win32` 和对应 Windows 运行时。打包直接复制校验后的官方运行时和锁定生产依赖，不重新编译，单次处理一个平台。下载器支持四段并行、低于 800 KiB/s 时切换可信来源，必须匹配官方 SHA-256 才会解压。开发模式已存在运行时可通过本进程 `FILE_BRIDGE_ELECTRON` 指定，避免重复下载。
+后续启动复用相同 profile 的配置。每个 profile 只允许一个监督进程。网站只监听 `127.0.0.1`；公网访问通过 Cloudflare。主机控制接口另设随机回环端口和独立控制凭据，不暴露给网页。
 
-源码不含访问令牌、配对码、私钥、收到的文件或运行日志；测试截图不应出现私密入口。原始 1.0 来源与校验记录仍保留于 `docs/SOURCE-MANIFEST.json`，2.0 为本分支新增实现。
+临时隧道重建会更换网址。长期使用建议配置 Cloudflare 命名隧道和固定域名：
+
+```sh
+node source/host/cli.cjs start --profile-dir /absolute/host-state --port 8790 --tunnel named --cloudflared /absolute/cloudflared --tunnel-config /private/tunnel.yml --tunnel-name YOUR_TUNNEL --public-url https://files.example.com
+```
+
+命名隧道配置中的 ingress 服务必须指向这里设置的主机回环端口。使用已有、有效的 Cloudflare 隧道配置和认证文件；应用不会创建账户、域名或虚构认证。配置和认证文件不要提交仓库。
+
+## 保留的稳定性机制
+
+- 网站和隧道由同一个监督进程分别监控，崩溃后按 1、2、3……秒重试，最长间隔 30 秒。网站连续三次健康检查失败会被重启。隧道自身负责网络重连，监督进程通过其本地 readiness 检查状态。
+- 浏览器把待发送文字和文件保存到 IndexedDB。网络中断后自动重试；刷新并重新打开相同网址后读取未完成任务。完成后移除浏览器中的文件副本，仅保留最近发送结果。
+- 文件按 1 MiB 分块上传并在主机落盘，每块校验后才确认。主机重启后核对已有分块，只重传缺失或损坏部分。完成时重新核对各块、文件长度并记录完整文件摘要；文件和清单落盘后才返回保存成功。
+- 文字任务按请求编号去重，文件按内容清单和名称复用上传结果。确认丢失后重试不会重复生成最近内容。
+- 浏览器持续恢复最近内容列表；后台重启保留入口令牌、任务和文件。下载支持 HTTP Range。最近内容保留 24 小时，归档内容永久保存在主机；上传分块与上传记录保留 7 天。
+- 日志轮转，每份 2 MiB，保留三份旧日志。不记录访问令牌、文字内容或 Cloudflare 认证文件内容。
+
+## 使用边界
+
+- 主机需要保持开机、联网并有足够磁盘空间。主机断电期间网站不可访问；自动登录启动在相应用户登录后生效。监督进程本身被结束后，需要重新启动主机程序或在下次登录时启动。
+- 浏览器存储属于当前网站地址。清除网站数据、使用不保留数据的隐私模式或浏览器回收存储，会影响待发送任务。临时隧道换网址后，旧地址的浏览器任务不会自动跨域搬迁；重新选择相同文件会核对并复用主机上的分块。固定域名可避免这个地址变化问题。
+- 公共隧道没有本项目可控制的可用性承诺。当前实现不使用公共 MQTT/WSS 测试中继，也不提供“永不断线”承诺。
+- 访问网址包含访问凭据。持有完整网址的人可以查看和发送共享内容，请仅分享给需要使用的人。
+
+## 源码、数据与验证
+
+源码入口为 `source/server.js`、`source/public/` 和 `source/host/`。默认 profile 为根目录 `var/`；源代码、接收内容和运行状态分离。直接调试网站可运行 `node source/server.js`；它默认使用 `source/data/`，并兼容读取原版 `source/received/`、`source/archive/` 中的已有文件。
+
+```sh
+npm test
+python tests/browser-functional.py /private/current-url.txt
+# 在已启动远端测试浏览器的 CDP 接口上验收：
+python tests/browser-functional.py /private/current-url.txt http://127.0.0.1:18892
+# Windows 用户会话，无需 npm 测试依赖，连接已启动的隔离浏览器：
+node tests/browser-windows.cjs 18892
+```
+
+浏览器测试需要 Playwright；`npm test` 只使用 Node.js 标准库。故障测试仅操作各自创建的进程和临时目录。验收范围见 `docs/HANDOFF.md`，设计见 `docs/DESIGN.md`。旧版源码 ZIP 仅作历史备份，不属于当前运行程序。`docs/SOURCE-MANIFEST.json` 是原版来源记录，不是 3.0 的当前文件清单。

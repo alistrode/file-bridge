@@ -1,20 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-if exist "runtime\FileBridge.exe" (
-  start "" "%~dp0runtime\FileBridge.exe" "%~dp0" %*
-  exit /b 0
-)
-if exist "runtime\electron.exe" (
-  start "" "%~dp0runtime\electron.exe" "%~dp0" %*
-  exit /b 0
-)
-where node >nul 2>nul
-if errorlevel 1 (
-  echo Node.js 22 or newer is required for this source checkout.
-  echo Download it from https://nodejs.org/ or use the prepared Windows package.
-  pause
-  exit /b 1
-)
-node scripts\start-dev.cjs %*
-if errorlevel 1 pause
+set "FB_NODE=%~dp0runtime\node.exe"
+if not exist "%FB_NODE%" set "FB_NODE=node"
+set "FB_CF=%~dp0runtime\cloudflared.exe"
+if not exist "%FB_CF%" set "FB_CF=cloudflared"
+"%FB_NODE%" source\host\cli.cjs start --cloudflared "%FB_CF%" %*

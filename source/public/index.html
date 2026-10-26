@@ -1,1 +1,85 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>File Bridge</title><style>:root{color-scheme:dark;font-family:system-ui;background:#0c1020;color:#eff4ff}body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0,#263a79,#0c1020 48%)}main{max-width:740px;margin:auto;padding:28px 16px 50px}.card{background:#171d33;border:1px solid #344269;border-radius:16px;padding:16px;margin-top:15px}textarea{box-sizing:border-box;width:100%;min-height:105px;border-radius:10px;border:1px solid #44527a;background:#0d1326;color:#fff;padding:12px;font:inherit}button,.pick{border:0;border-radius:10px;background:#6e82ff;color:white;padding:11px 14px;font-weight:700;cursor:pointer}.pick{display:block;text-align:center;border:2px dashed #5166a5;background:#202a4a}.pick.dragover{border-color:#76ddad;background:#2e4b59}.pick input{display:none}.muted{color:#9aa8c9;font-size:13px}.progress{height:8px;border-radius:8px;background:#0a0e1c;overflow:hidden;margin-top:12px}.progress i{display:block;height:100%;background:#76ddad;width:0}.item{padding:12px 0;border-bottom:1px solid #293452}.item img{display:block;max-width:100%;max-height:240px;border-radius:9px;margin-top:8px}a{color:#9aafff}#notice{min-height:20px;color:#76ddad}.archive{float:right;padding:6px 9px;font-size:12px}</style><main><h1>File Bridge</h1><p>手机与电脑传文字、图片和最大 1 GB 的单个文件。</p><section class="card"><h2>发送文字</h2><textarea id="text" placeholder="输入要发送的文字"></textarea><br><button id="sendText">发送文字</button> <span id="notice"></span></section><section class="card"><h2>发送文件或图片</h2><label class="pick" id="dropZone">拖入文件到这里，或点击选择<input id="file" type="file"></label><div class="muted" id="fileName">未选择文件</div><button id="sendFile" disabled>发送文件</button><div class="progress"><i id="bar"></i></div></section><section class="card"><h2>最近收到</h2><div id="items" class="muted">加载中…</div></section></main><script src="/app.js"></script></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>File Bridge</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">FILE BRIDGE</p>
+          <h1>打开网页，就能传。</h1>
+          <p class="intro">
+            手机、电脑打开同一个网址，文字、图片和文件随手互传。
+          </p>
+        </div>
+        <span id="connection" role="status">正在连接…</span>
+      </header>
+      <p id="notice" role="status" aria-live="polite"></p>
+      <div class="send-grid">
+        <section class="card">
+          <h2>发送文字</h2>
+          <form id="textForm">
+            <label class="sr-only" for="text">要发送的文字</label
+            ><textarea
+              id="text"
+              placeholder="粘贴链接、文字或想留给另一边的内容…"
+              maxlength="500000"
+              required
+            ></textarea
+            ><button id="sendText" type="submit" disabled>
+              发送文字 <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+        </section>
+        <section class="card">
+          <h2>发送文件或图片</h2>
+          <label class="pick" id="dropZone" for="file"
+            ><span class="upload-icon" aria-hidden="true">↑</span
+            ><strong>拖入文件，或点击选择</strong
+            ><span class="muted">单个文件最大 1 GB</span
+            ><input id="file" type="file"
+          /></label>
+          <p id="fileName" class="muted">未选择文件</p>
+          <button id="sendFile" disabled>
+            发送文件 <span aria-hidden="true">↗</span>
+          </button>
+        </section>
+      </div>
+      <section class="card queue-card">
+        <div class="section-head">
+          <h2>发送记录</h2>
+          <span class="muted">收到保存确认后，才算发送完成</span>
+        </div>
+        <p class="muted">
+          待发送内容会保存在当前浏览器，断线或刷新后继续。请保留此网站的浏览器数据。
+        </p>
+        <div id="queue" aria-live="polite">
+          <p class="empty">还没有待发送的内容</p>
+        </div>
+      </section>
+      <section class="card">
+        <div class="section-head">
+          <h2 id="receivedTitle">最近收到</h2>
+          <div class="tabs">
+            <button id="recentTab" class="tab active" aria-pressed="true">
+              最近收到</button
+            ><button id="archiveTab" class="tab" aria-pressed="false">
+              已归档
+            </button>
+          </div>
+        </div>
+        <p id="retention" class="muted">
+          最近内容保留 24 小时，归档后保存在主机上。
+        </p>
+        <div id="items" aria-live="polite"><p class="empty">正在加载…</p></div>
+      </section>
+      <footer>同一个网址，同一份内容。主机需要保持开机和联网。</footer>
+    </main>
+  </body>
+</html>
