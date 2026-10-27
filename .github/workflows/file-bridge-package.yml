@@ -2,7 +2,7 @@ name: Upload File Bridge runtime package
 on:
   push:
     branches: [projects/file-bridge]
-    paths: [.github/workflows/file-bridge-package.yml]
+    paths: ['.github/workflows/file-bridge-package.yml', 'release/*.zip']
 permissions:
   contents: write
 jobs:

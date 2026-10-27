@@ -7,7 +7,7 @@ function inventory(){const m=JSON.parse(fs.readFileSync(path.join(root,'FILES.js
  assert.equal(process.platform,'win32');assert.equal(process.execPath.toLowerCase(),path.join(root,'runtime/node.exe').toLowerCase());
  const files=inventory(),{request}=require(path.join(root,'source/host/cli.cjs')),profile=path.join(root,'var');
  let s; const readyUntil=Date.now()+120000;
- while(Date.now()<readyUntil){s=await request(profile,'/status');if(s.url&&s.webState==='online'&&s.tunnelState==='online')break;await new Promise(r=>setTimeout(r,1000));}
+ while(Date.now()<readyUntil){try{s=await request(profile,'/status');if(s.url&&s.webState==='online'&&s.tunnelState==='online')break;}catch{}await new Promise(r=>setTimeout(r,1000));}
 assert.equal(s.version,require(path.join(root,'package.json')).version);assert.equal(s.webState,'online');assert.equal(s.tunnelState,'online');assert(s.url.startsWith('https://'));
  if(process.argv.includes('--compat')){
   const cfg=JSON.parse(fs.readFileSync(path.join(profile,'config.json'),'utf8'));

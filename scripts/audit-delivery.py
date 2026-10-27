@@ -1,11 +1,20 @@
 """Check package completeness, source identity, skill indexes and optional pushed refs."""
-import argparse,hashlib,json,pathlib,subprocess,zipfile
+import argparse,hashlib,json,pathlib,subprocess,zipfile,xml.etree.ElementTree as ET,base64,re
 p=argparse.ArgumentParser();p.add_argument('--remote',action='store_true');a=p.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];skill=(root/'.agents/skills/file-bridge/SKILL.md').read_text()
 tracked=subprocess.check_output(['git','ls-files','-z'],cwd=root,text=True).split('\0');tracked=[f for f in tracked if f]
 commands=[f for f in tracked if f.endswith(('.cmd','.sh','.ps1','.cjs','.py','.vbs')) or f.startswith('.github/workflows/')]
 missing=[f for f in commands if f not in skill]
 if missing:raise SystemExit('Missing skill command index: '+', '.join(missing))
+configs=[f for f in tracked if f.startswith('config/')]
+for f in configs:
+ assert f in skill,'Missing configuration index: '+f
+ text=(root/f).read_text(encoding='utf-8-sig')
+ if f.endswith('.xml'):
+  ET.fromstring(text);assert '?token=' not in text
+  for command in re.findall(r'-EncodedCommand\s+([A-Za-z0-9+/=]+)',text):assert '?token=' not in base64.b64decode(command).decode('utf-16le')
+ elif f.endswith('.json'):
+  config=json.loads(text);assert set(config)=={'port','tunnel'} and set(config['tunnel'])=={'mode','executable'}
 archive=root/f'release/File-Bridge-{version}-windows-x64.zip'
 with zipfile.ZipFile(archive) as z:
  prefix=f'File-Bridge-{version}-windows-x64/'
@@ -21,4 +30,4 @@ if a.remote:
  assert not subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True).strip(),'Uncommitted files remain'
  subprocess.run(['git','fetch','origin','refs/heads/projects/file-bridge:refs/remotes/origin/projects/file-bridge'],cwd=root,check=True)
  subprocess.run(['git','diff','--quiet','HEAD','origin/projects/file-bridge'],cwd=root,check=True)
-print(json.dumps({'passed':True,'version':version,'indexed_command_files':len(commands),'matching_application_files':len(required),'verified_payload_files':len(manifest['sha256']),'package_bytes':archive.stat().st_size,'remote_verified':a.remote}))
+print(json.dumps({'passed':True,'version':version,'indexed_command_files':len(commands),'indexed_configurations':len(configs),'matching_application_files':len(required),'verified_payload_files':len(manifest['sha256']),'package_bytes':archive.stat().st_size,'remote_verified':a.remote}))

@@ -8,7 +8,8 @@ const {request,open}=require('./cli.cjs');
  console.log('Waiting for the website address...');
  const end=Date.now()+120000;
  while(Date.now()<end){
-  const s=await request(profile,'/status');
+  let s;
+  try{s=await request(profile,'/status');}catch{await new Promise(r=>setTimeout(r,1000));continue;}
   if(s.url&&s.tunnelState==='online'||args.includes('off')&&s.localUrl){
    const url=s.url||s.localUrl;console.log('Website: '+url);
    const child=open(url);child.on('error',()=>console.log('Open the website address above in your browser.'));child.unref();return;

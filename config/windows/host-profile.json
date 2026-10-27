@@ -1,0 +1,7 @@
+{
+  "tunnel": {
+    "executable": "E:\\xxm\\file-bridge-single\\dev\\tools\\cloudflared.exe",
+    "mode": "quick"
+  },
+  "port": 18791
+}

@@ -268,8 +268,9 @@ const control = http.createServer(async (req, res) => {
     req.url === "/stop" &&
     req.headers["x-file-bridge-request"] === "1"
   ) {
-    res.end('{"stopping":true}');
-    return stop();
+    // Flush the ACK before Windows process/storage cleanup can block the event loop.
+    res.end('{"stopping":true}', () => setImmediate(stop));
+    return;
   }
   res.writeHead(404);
   res.end();

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\FileBridge-Open-Normal-Browser</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-21-882649809-2808842462-819054599-1001</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <IdleSettings>
+      <Duration>PT10M</Duration>
+      <WaitTimeout>PT1H</WaitTimeout>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
+      <Arguments>-NoProfile -WindowStyle Hidden -EncodedCommand JAB1AD0AKABHAGUAdAAtAEMAbwBuAHQAZQBuAHQAIAAnAEUAOgBcAHgAeABtAFwAZgBpAGwAZQAtAGIAcgBpAGQAZwBlAC0AcwBpAG4AZwBsAGUAXABkAGUAdgBcAHYAYQByAFwAYwB1AHIAcgBlAG4AdAAtAHUAcgBsAC4AdAB4AHQAJwAgAC0AUgBhAHcAKQAuAFQAcgBpAG0AKAApADsAUwB0AGEAcgB0AC0AUAByAG8AYwBlAHMAcwAgACcAQwA6AFwAUAByAG8AZwByAGEAbQAgAEYAaQBsAGUAcwBcAEcAbwBvAGcAbABlAFwAQwBoAHIAbwBtAGUAXABBAHAAcABsAGkAYwBhAHQAaQBvAG4AXABjAGgAcgBvAG0AZQAuAGUAeABlACcAIAAtAEEAcgBnAHUAbQBlAG4AdABMAGkAcwB0ACAAQAAoACcALQAtAG4AZQB3AC0AdwBpAG4AZABvAHcAJwAsACQAdQApAA==</Arguments>
+    </Exec>
+  </Actions>
+</Task>
