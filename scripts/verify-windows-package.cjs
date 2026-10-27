@@ -6,7 +6,16 @@ function inventory(){const m=JSON.parse(fs.readFileSync(path.join(root,'FILES.js
 (async()=>{
  assert.equal(process.platform,'win32');assert.equal(process.execPath.toLowerCase(),path.join(root,'runtime/node.exe').toLowerCase());
  const files=inventory(),{request}=require(path.join(root,'source/host/cli.cjs')),profile=path.join(root,'var');
- const s=await request(profile,'/status');assert.equal(s.version,'3.1.0');assert.equal(s.webState,'online');assert.equal(s.tunnelState,'online');assert(s.url.startsWith('https://'));
+ let s; const readyUntil=Date.now()+120000;
+ while(Date.now()<readyUntil){s=await request(profile,'/status');if(s.url&&s.webState==='online'&&s.tunnelState==='online')break;await new Promise(r=>setTimeout(r,1000));}
+assert.equal(s.version,require(path.join(root,'package.json')).version);assert.equal(s.webState,'online');assert.equal(s.tunnelState,'online');assert(s.url.startsWith('https://'));
+ if(process.argv.includes('--compat')){
+  const cfg=JSON.parse(fs.readFileSync(path.join(profile,'config.json'),'utf8'));
+  assert.equal(path.resolve(cfg.tunnel.executable).toLowerCase(),path.join(root,'runtime/cloudflared.exe').toLowerCase());
+  inventory();await request(profile,'/stop',true);
+  const report=JSON.parse(fs.readFileSync(out,'utf8'));assert(report.passed);report.compatibilityPowerShell=true;report.compatibilityFilesIncluded=true;
+  fs.writeFileSync(out,JSON.stringify(report,null,2));console.log('Bundled compatibility PowerShell startup passed without system Node/cloudflared');return;
+ }
  const home=await fetch(s.url,{signal:AbortSignal.timeout(45000)});assert.equal(home.status,200);assert((await home.text()).includes('sourceName'));
  const base=new URL(s.url).origin,token=fs.readFileSync(path.join(profile,'site/token.txt'),'utf8').trim();
  async function api(route,data,method){const r=await fetch(base+route,{method:method||(data?'POST':'GET'),headers:{'x-file-bridge-token':token,'x-file-bridge-request':'1',...(data&&!Buffer.isBuffer(data)?{'content-type':'application/json'}:{})},body:data?(Buffer.isBuffer(data)?data:JSON.stringify(data)):undefined,signal:AbortSignal.timeout(45000)});assert(r.ok,'HTTP '+r.status+' '+route);return r;}

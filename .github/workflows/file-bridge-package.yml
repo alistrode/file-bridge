@@ -14,5 +14,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test -s release/File-Bridge-3.1.0-windows-x64.zip
-          gh release upload file-bridge-v3.1.0 release/File-Bridge-3.1.0-windows-x64.zip --clobber --repo "$GITHUB_REPOSITORY"
+          version=$(node -p "require('./package.json').version")
+          archive="release/File-Bridge-${version}-windows-x64.zip"
+          tag="file-bridge-v${version}"
+          test -s "$archive"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$tag" --draft --target "$GITHUB_SHA" --title "File Bridge ${version} Windows x64" --notes 'Windows 完整包；实际验收通过后发布。' --repo "$GITHUB_REPOSITORY"
+          gh release upload "$tag" "$archive" --clobber --repo "$GITHUB_REPOSITORY"

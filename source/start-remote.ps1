@@ -1,8 +1,12 @@
-param([int]$Port=8790,[string]$ProfileDir='',[string]$Cloudflared='cloudflared')
+param([int]$Port=8790,[string]$ProfileDir='',[string]$Cloudflared='')
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSCommandPath
 if([string]::IsNullOrWhiteSpace($ProfileDir)){$ProfileDir=Join-Path (Split-Path -Parent $root) 'var'}
 $node=Join-Path (Split-Path -Parent $root) 'runtime\node.exe'
 if(!(Test-Path $node)){$node=(Get-Command node -ErrorAction Stop).Source}
+if([string]::IsNullOrWhiteSpace($Cloudflared)){
+ $Cloudflared=Join-Path (Split-Path -Parent $root) 'runtime\cloudflared.exe'
+ if(!(Test-Path $Cloudflared)){$Cloudflared='cloudflared'}
+}
 & $node (Join-Path $root 'host\cli.cjs') start --profile-dir $ProfileDir --port $Port --cloudflared $Cloudflared
 exit $LASTEXITCODE

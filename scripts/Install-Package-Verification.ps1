@@ -1,8 +1,8 @@
-param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[Parameter(Mandatory=$true)][string]$VerifierPsUrl,[Parameter(Mandatory=$true)][string]$VerifierJsUrl)
+param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[Parameter(Mandatory=$true)][string]$VerifierPsUrl,[Parameter(Mandatory=$true)][string]$VerifierJsUrl,[string]$PackageVersion='3.1.1')
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $base='E:\xxm\file-bridge-single'
-$zip=$base+'\release\File-Bridge-3.1.0-windows-x64.zip'
+$zip=$base+'\release\File-Bridge-'+$PackageVersion+'-windows-x64.zip'
 $clean=$base+'\release\package-verification-'+[Guid]::NewGuid().ToString('N')
 New-Item -ItemType Directory -Force ($base+'\release')|Out-Null
 $dev=$base+'\dev'
@@ -12,7 +12,7 @@ Invoke-WebRequest $VerifierJsUrl -OutFile ($dev+'\scripts\verify-windows-package
 Invoke-WebRequest $PackageUrl -OutFile $zip -UseBasicParsing -TimeoutSec 300
 if((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower() -ne $ExpectedSha256.ToLower()){throw 'Downloaded archive differs from the packaged artifact'}
 Expand-Archive -LiteralPath $zip -DestinationPath $clean
-$root=Join-Path $clean 'File-Bridge-3.1.0-windows-x64'
+$root=Join-Path $clean ('File-Bridge-'+$PackageVersion+'-windows-x64')
 if(Test-Path ($root+'\var')){throw 'Package includes private state'}
 $dev=$base+'\dev'
 $s=New-Object -ComObject Schedule.Service;$s.Connect();$folder=$s.GetFolder('\')

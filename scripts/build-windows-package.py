@@ -4,7 +4,7 @@ Inputs: node-v26.4.0-win-x64.zip, cloudflared.exe (2026.10.4), cloudflared-LICEN
 """
 from pathlib import Path
 import hashlib,json,shutil,sys,zipfile
-root=Path(__file__).resolve().parents[1];inputs=Path(sys.argv[1]);stage=Path(sys.argv[2]);app=stage/'File-Bridge-3.1.0-windows-x64'
+root=Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];inputs=Path(sys.argv[1]);stage=Path(sys.argv[2]);app=stage/f'File-Bridge-{version}-windows-x64'
 if app.exists():raise SystemExit('Use a new staging directory')
 (app/'runtime').mkdir(parents=True);(app/'licenses').mkdir()
 with zipfile.ZipFile(inputs/'node-v26.4.0-win-x64.zip') as z:
@@ -13,11 +13,11 @@ with zipfile.ZipFile(inputs/'node-v26.4.0-win-x64.zip') as z:
 shutil.copy2(inputs/'cloudflared.exe',app/'runtime/cloudflared.exe');shutil.copy2(inputs/'cloudflared-LICENSE',app/'licenses/cloudflared-LICENSE')
 for file in (root/'source').rglob('*'):
  rel=file.relative_to(root)
- if file.is_file() and (file.suffix in ['.js','.cjs','.html','.css'] or rel.as_posix()=='source/package.json') and not any(p in ['data','received','archive','artifacts'] for p in rel.parts):
+ if file.is_file() and (file.suffix in ['.js','.cjs','.html','.css','.ps1','.vbs','.md'] or rel.as_posix()=='source/package.json') and not any(p in ['data','received','archive','artifacts'] for p in rel.parts):
   target=app/rel;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,target)
 for file in ['package.json','Start-File-Bridge.cmd','File-Bridge-CLI.cmd','Open-File-Bridge.cmd','Stop-File-Bridge.cmd']:
  shutil.copy2(root/file,app/file)
-(app/'README.txt').write_text('''File Bridge 3.1 — Windows x64 完整运行包
+(app/'README.txt').write_text(f'''File Bridge {version} — Windows x64 完整运行包
 
 完整解压此文件夹，再双击 Start-File-Bridge.cmd。无需安装 Node.js、npm 或 cloudflared。
 程序启动后台网站和公网隧道，地址准备好后在普通默认浏览器中打开。
@@ -39,8 +39,8 @@ Source/license: https://github.com/cloudflare/cloudflared/tree/2026.10.4
 No npm production dependencies. Browsers and tests are not included.
 ''')
 manifest={str(p.relative_to(app)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(app.rglob('*')) if p.is_file()}
-(app/'FILES.json').write_text(json.dumps({'version':'3.1.0','platform':'windows-x64','sha256':manifest},indent=2)+'\n')
-out=root/'release'/'File-Bridge-3.1.0-windows-x64.zip';out.parent.mkdir(exist_ok=True)
+(app/'FILES.json').write_text(json.dumps({'version':version,'platform':'windows-x64','sha256':manifest},indent=2)+'\n')
+out=root/'release'/f'File-Bridge-{version}-windows-x64.zip';out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
  for p in sorted(app.rglob('*')):
   if p.is_file():z.write(p,p.relative_to(stage))
