@@ -15,8 +15,9 @@ try{
   Start-Sleep -Milliseconds 500
  }
  if(!$stopped){throw 'Previous phase has not fully stopped'}
- & ($env:SystemRoot+'\System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File ($Root+'\source\start-remote.ps1') 2>&1 | Out-File ($dev+'\artifacts\package-compat-start-private.log') -Encoding utf8
- if($LASTEXITCODE -ne 0){throw 'Bundled compatibility launcher failed'}
+ $compat=Start-Process -FilePath ($env:SystemRoot+'\System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$Root+'\source\start-remote.ps1"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput ($dev+'\artifacts\package-compat-start-private.log') -RedirectStandardError ($dev+'\artifacts\package-compat-start-error.log')
  & ($Root+'\runtime\node.exe') ($dev+'\scripts\verify-windows-package.cjs') $Root ($dev+'\artifacts\package-verification.json') --compat 2>&1 | Out-File ($dev+'\artifacts\package-compat-verification.log') -Encoding utf8
  if($LASTEXITCODE -ne 0){throw 'Compatibility package verification failed'}
+ if(!$compat.WaitForExit(30000)){throw 'Compatibility wrapper did not exit after explicit stop'}
+ if($compat.ExitCode -ne 0){throw 'Compatibility wrapper exited unsuccessfully'}
 }catch{ @{passed=$false;error=$_.Exception.Message}|ConvertTo-Json|Set-Content ($dev+'\artifacts\package-verification.json') -Encoding UTF8;exit 1}

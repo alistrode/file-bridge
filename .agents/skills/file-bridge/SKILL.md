@@ -92,6 +92,8 @@ python scripts/verify-release-download.py
 | `scripts/Export-Windows-Configuration.ps1` | 导出实际 Windows 的三个有用任务定义和白名单主机配置，不读取或上传凭据。 |
 | `scripts/Stop-Package-Verification.ps1` | 仅清理 release/package-verification-* 下的本人测试实例；检查进程命令行归属，不操作正式网站。 |
 
+| `scripts/Restart-Clean-Package-Verification.ps1` | 用已完整校验的 ZIP 新解压验证；只清理本人的验证任务/实例，异步检查 Windows 兼容入口。 |
+
 旧的临时原子补丁应用命令已由 tests/Deploy-Sources.ps1 覆盖，修复代码本身保存在 source/server.js、source/public/app.js 与 source/host/storage.cjs；旧 CDP/恢复实验已由表中的可复现验收脚本覆盖。无效的旧配对脚本、失败传输请求、过期授权链接和含令牌的日志不作为发布内容。
 
 ## 实际主机配置索引
@@ -101,6 +103,6 @@ python scripts/verify-release-download.py
 - `config/windows/FileBridge-Single-Browser-Final.xml`：部署和包验收脚本复用的实际交互用户任务模板。
 - `config/windows/FileBridge-Open-Normal-Browser.xml`：从私有 current-url.txt 动态读取入口并打开普通浏览器的实际任务。
 
-以上是指定 E:\xxm 布局的可复现维护配置，XML 仅转换了文本编码；普通单文件夹包启动自动生成自己的 var/，无需导入这些任务。在相同已授权布局恢复任务定义的命令是 `Register-ScheduledTask -TaskName NAME -Xml (Get-Content config/windows/NAME.xml -Raw) -Force`，不会自动启动任务。跨机器先适配账号和路径，不能盲目导入旧 SID。
+以上是指定 E:\xxm 布局的可复现维护配置，XML 仅规范化文本编码和换行；普通单文件夹包启动自动生成自己的 var/，无需导入这些任务。在相同已授权布局恢复任务定义的命令是 `Register-ScheduledTask -TaskName NAME -Xml (Get-Content config/windows/NAME.xml -Raw) -Force`，不会自动启动任务。跨机器先适配账号和路径，不能盲目导入旧 SID。
 
 远端下载中断时，使用 scripts/prepare-package-verification.py 的 `--resume-existing` 选项生成新请求；只续传同一候选归档，最终 SHA-256 与完整包不一致时禁止解压或启动。分段缓存和短期授权链接不提交仓库。
