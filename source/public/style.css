@@ -118,8 +118,8 @@ button {
 button span {
   margin-left: 14px;
 }
-button:hover {
-  filter: brightness(1.08);
+@media (hover: hover) and (pointer: fine) {
+  button:hover:not(:disabled) { filter: brightness(1.08); }
 }
 button:focus-visible,
 a:focus-visible,
@@ -361,3 +361,13 @@ progress.progress::-webkit-progress-value {
 progress.progress::-moz-progress-bar {
   background: #a0e1ca;
 }
+
+.source-form, .source-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.source-form label, .source-filter label { font-size: 13px; color: #bcccd6; }
+.source-form input, .source-filter select { min-width: 0; max-width: 100%; background: #0d1722; color: #eaf1f5; border: 1px solid #3d5060; border-radius: 9px; padding: 10px 12px; font: inherit; font-size: 14px; }
+.source-form input { flex: 1; width: 180px; }
+.source-card .muted { margin-bottom: 0; }
+.source-filter { margin: 18px 0 2px; }
+.source-filter select { flex: 1; width: 200px; }
+.source-badge { display: inline-block; max-width: 100%; border: 1px solid #376957; background: #193a34; color: #a4ecd3; font-size: 12px; padding: 5px 9px; border-radius: 7px; overflow-wrap: anywhere; }
+select:focus-visible { outline: 2px solid #a0e1ca; outline-offset: 3px; }

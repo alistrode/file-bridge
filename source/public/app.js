@@ -15,6 +15,36 @@
     closed = false,
     refreshGeneration = 0,
     storageReady = false;
+  let identity;
+  try { identity = JSON.parse(localStorage.getItem("file-bridge-source")); } catch {}
+  if (!identity || !/^[a-f0-9-]{36}$/i.test(identity.id) || typeof identity.name !== "string") {
+    const id = crypto.randomUUID();
+    identity = { id, name: "主机 " + id.slice(0, 6).toUpperCase() };
+  }
+  let identitySaved = false;
+  function saveIdentity() {
+    try {
+      localStorage.setItem("file-bridge-source", JSON.stringify(identity));
+      identitySaved = true;
+    } catch {
+      identitySaved = false;
+      tell("来源名称无法保存，请允许此网站使用浏览器存储");
+    }
+  }
+  saveIdentity();
+  $("#sourceName").value = identity.name;
+  $("#sourceForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = $("#sourceName").value.trim();
+    if (!name || [...name].length > 40 || /[\x00-\x1f\x7f]/.test(name)) {
+      tell("请输入 1–40 字的来源名称"); return;
+    }
+    identity = { id: identity.id, name };
+    saveIdentity();
+    if (identitySaved) tell("来源名称已保存，新发送的内容将使用“" + name + "”");
+  });
+  const sourceLabel = (s) => s ? s.name + " · " + s.id.slice(0, 6).toUpperCase() : "未标记来源（旧记录）";
+  $("#sourceFilter").addEventListener("change", () => refresh());
   const attempts = new Map();
   const esc = (s) =>
     String(s ?? "").replace(
@@ -105,7 +135,7 @@
           .reverse()
           .map(
             (j) =>
-              `<div class="entry"><div class="row"><strong>${esc(j.type === "text" ? j.text.slice(0, 70) : j.name)}</strong><span class="state ${["waiting", "error"].includes(j.state) ? "waiting" : ""}">${states[j.state] || states.queued}</span></div>${j.type === "file" ? `<p class="muted">${size(j.size)} · ${Math.floor((j.progress || 0) * 100)}%</p>` : ""}${j.error ? `<p class="muted">${esc(j.error)}</p>` : ""}${!["done", "error"].includes(j.state) ? `<progress class="progress" max="100" value="${Math.floor((j.progress || 0) * 100)}"></progress>` : ""}${["error", "waiting"].includes(j.state) ? `<p><button class="secondary" data-retry="${j.id}">继续发送</button> <button class="secondary" data-remove="${j.id}">移除任务</button></p>` : ""}</div>`,
+              `<div class="entry"><div class="row"><strong>${esc(j.type === "text" ? j.text.slice(0, 70) : j.name)}</strong><span class="state ${["waiting", "error"].includes(j.state) ? "waiting" : ""}">${states[j.state] || states.queued}</span></div>${j.type === "file" ? `<p class="muted">${size(j.size)} · ${Math.floor((j.progress || 0) * 100)}%</p>` : ""}<p class="muted">来源：${esc(sourceLabel(j.source))}</p>${j.error ? `<p class="muted">${esc(j.error)}</p>` : ""}${!["done", "error"].includes(j.state) ? `<progress class="progress" max="100" value="${Math.floor((j.progress || 0) * 100)}"></progress>` : ""}${["error", "waiting"].includes(j.state) ? `<p><button class="secondary" data-retry="${j.id}">继续发送</button> <button class="secondary" data-remove="${j.id}">移除任务</button></p>` : ""}</div>`,
           )
           .join("")
       : '<p class="empty">还没有待发送的内容</p>';
@@ -120,7 +150,7 @@
     if (j.type === "text") {
       j.state = "sending";
       render();
-      await api("text", { data: { id: j.id, text: j.text } });
+      await api("text", { data: { id: j.id, text: j.text, source: j.source || null } });
       return;
     }
     if (!j.file)
@@ -149,6 +179,7 @@
     const s = await api("uploads", {
       data: {
         id: j.uploadId || j.id,
+        source: j.source || null,
         name: j.name,
         size: j.size,
         mime: j.mime,
@@ -220,8 +251,10 @@
     }
   }
   async function enqueue(j) {
+    if (!identitySaved) throw Error("请先允许网站存储并保存来源名称");
     if (!db || !storageReady)
       throw Error("当前浏览器未提供持久存储，请允许网站存储后重试");
+    j.source = { ...identity };
     await put(j);
     jobs.push(j);
     render();
@@ -238,14 +271,25 @@
       if (generation !== refreshGeneration) return;
       connection(true);
       pollFailures = 0;
-      $("#items").innerHTML = r.items.length
-        ? r.items
+      const filter = $("#sourceFilter"), chosen = filter.value;
+      const sources = new Map();
+      for (const s of r.sources || r.items.map(i => i.source)) sources.set(s?.id || "legacy", s);
+      // Keep a selected source even when it has no records in the other tab.
+      const previous = filter.selectedOptions[0]?.textContent;
+      if (chosen !== "*" && !sources.has(chosen)) sources.set(chosen, { label: previous });
+      filter.innerHTML = '<option value="*">全部来源</option>' + [...sources].map(([id, s]) =>
+        `<option value="${esc(id)}">${esc(s?.label || sourceLabel(s))}</option>`).join("");
+      filter.value = chosen;
+      const visible = r.items.filter(i => chosen === "*" || (i.source?.id || "legacy") === chosen);
+      $("#sourceCount").textContent = visible.length + " 条 / 共 " + r.items.length + " 条";
+      $("#items").innerHTML = visible.length
+        ? visible
             .map(
               (i) =>
-                `<div class="item" data-id="${esc(i.id)}">${i.kind === "text" ? `<pre>${esc(i.text)}</pre>` : `<p><a href="${esc(i.download)}">下载：${esc(i.name)}</a> <span class="muted">${size(i.size)}${i.verified ? " · 已完整保存" : ""}</span></p>${/^image\/(png|jpeg|gif|webp)$/.test(i.mime) && view === "recent" ? `<img src="${esc(i.download.replace("/download/", "/preview/"))}" alt="${esc(i.name)}" loading="lazy">` : ""}`}<div class="row"><time>${new Date(i.createdAt).toLocaleString()}</time>${view === "recent" ? `<button class="secondary" data-archive="${esc(i.id)}" ${i.archived ? "disabled" : ""}>${i.archived ? "已归档" : "归档到主机"}</button>` : ""}</div></div>`,
+                `<div class="item" data-id="${esc(i.id)}"><span class="source-badge">${esc(sourceLabel(i.source))}</span>${i.kind === "text" ? `<pre>${esc(i.text)}</pre>` : `<p><a href="${esc(i.download)}">下载：${esc(i.name)}</a> <span class="muted">${size(i.size)}${i.verified ? " · 已完整保存" : ""}</span></p>${/^image\/(png|jpeg|gif|webp)$/.test(i.mime) && view === "recent" ? `<img src="${esc(i.download.replace("/download/", "/preview/"))}" alt="${esc(i.name)}" loading="lazy">` : ""}`}<div class="row"><time>${new Date(i.createdAt).toLocaleString()}</time>${view === "recent" ? `<button class="secondary" data-archive="${esc(i.id)}" ${i.archived ? "disabled" : ""}>${i.archived ? "已归档" : "归档到主机"}</button>` : ""}</div></div>`,
             )
             .join("")
-        : `<p class="empty">${view === "recent" ? "还没有收到内容" : "还没有归档内容"}</p>`;
+        : `<p class="empty">${chosen !== "*" ? "此来源暂无内容" : view === "recent" ? "还没有收到内容" : "还没有归档内容"}</p>`;
     } catch (e) {
       if (generation !== refreshGeneration) return;
       pollFailures++;

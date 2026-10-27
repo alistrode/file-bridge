@@ -23,7 +23,7 @@ async function until(fn) {
     const s = await request(profile, "/status");
     return s.webState === "online" && s.tunnelState === "online" && s.url && s;
   });
-  assert.equal(first.version, "3.0.0");
+  assert.equal((await (await fetch(first.origin + "/health")).json()).version, require("../package.json").version);
   const token = fs.readFileSync(path.join(profile, "site/token.txt"), "utf8"),
     before = JSON.parse(
       fs.readFileSync(path.join(profile, "site/items.json"), "utf8"),

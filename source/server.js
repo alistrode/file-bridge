@@ -79,6 +79,21 @@ const name = (s) => {
   return result || "file.bin";
 };
 const fail = (status, message) => Object.assign(Error(message), { status });
+function source(value) {
+  if (value == null) return null; // Preserve pre-source clients and old queues.
+  if (!value || !uuid(value.id) || typeof value.name !== "string" ||
+      !value.name.trim() || [...value.name.trim()].length > 40 ||
+      /[\x00-\x1f\x7f]/.test(value.name))
+    throw fail(400, "来源名称或编号无效");
+  return { id: value.id.toLowerCase(), name: value.name.trim() };
+}
+const sameSource = (a, b) => (a?.id || "") === (b?.id || "");
+function sourceCatalog() {
+  const catalog = new Map();
+  for (const item of [...items, ...archived].sort((a, b) => a.createdAt - b.createdAt))
+    catalog.set(item.source?.id || "legacy", item.source || null);
+  return [...catalog.values()];
+}
 function record(item) {
   const existing = items.find((x) => x.id === item.id);
   if (existing) return existing;
@@ -260,6 +275,7 @@ async function complete(id) {
     const item = record({
       id,
       kind: m.mime.startsWith("image/") ? "image" : "file",
+      source: m.source || null,
       name: m.name,
       size: m.size,
       mime: m.mime,
@@ -314,7 +330,7 @@ async function serve(req, res) {
   );
   const u = new URL(req.url, "http://localhost");
   if (req.method === "GET" && u.pathname === "/health")
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, version: require("./package.json").version });
   if (!auth(req, u))
     return json(res, 401, { error: "请使用主机提供的完整网址打开网页" });
   if (
@@ -349,6 +365,7 @@ async function serve(req, res) {
     const saved = new Set(archived.map((i) => i.id));
     return json(res, 200, {
       items: items.map((item) => ({ ...item, archived: saved.has(item.id) })),
+      sources: sourceCatalog(),
     });
   }
   if (req.method === "POST" && u.pathname === "/api/text") {
@@ -360,8 +377,9 @@ async function serve(req, res) {
       Buffer.byteLength(v.text) > 1024 * 1024
     )
       throw fail(400, "文字内容或任务编号无效");
+    const origin = source(v.source);
     const old = items.find((i) => i.id === v.id);
-    if (old && (old.kind !== "text" || old.text !== v.text.trim()))
+    if (old && (old.kind !== "text" || old.text !== v.text.trim() || !sameSource(old.source, origin)))
       throw fail(409, "任务编号已用于其他内容");
     return json(res, 201, {
       ok: true,
@@ -369,6 +387,7 @@ async function serve(req, res) {
         id: v.id,
         kind: "text",
         text: v.text.trim(),
+        source: origin,
         createdAt: Date.now(),
       }),
     });
@@ -387,6 +406,7 @@ async function serve(req, res) {
       hash(v.blocks.join("")) !== v.manifest
     )
       throw fail(400, "文件清单无效或文件超过 1 GB");
+    const origin = source(v.source);
     const occupied = items.find((i) => i.id === v.id);
     if (
       occupied &&
@@ -394,7 +414,12 @@ async function serve(req, res) {
         !fs.existsSync(path.join(uploads, v.id, "job.json")))
     )
       throw fail(409, "任务编号已用于其他内容");
-    let canonical = v.id;
+    const requested = load(path.join(uploads, v.id, "job.json"), null);
+    if (requested && (!sameSource(requested.source, origin) ||
+        requested.manifest !== v.manifest || requested.size !== v.size ||
+        requested.name !== name(v.name) || requested.mime !== String(v.mime || "application/octet-stream").slice(0, 100)))
+      throw fail(409, "任务编号对应的文件或来源已改变");
+    let canonical = v.id, reuseFrom = null;
     for (const candidate of fs.readdirSync(uploads)) {
       if (!uuid(candidate)) continue;
       const other = load(path.join(uploads, candidate, "job.json"), null);
@@ -407,8 +432,8 @@ async function serve(req, res) {
           String(v.mime || "application/octet-stream").slice(0, 100) &&
         (other.state !== "completed" || items.some((x) => x.id === candidate))
       ) {
-        canonical = candidate;
-        break;
+        if (sameSource(other.source, origin)) { canonical = candidate; break; }
+        reuseFrom ||= candidate;
       }
     }
     return locked(canonical, async () => {
@@ -416,16 +441,18 @@ async function serve(req, res) {
         old = load(path.join(dir, "job.json"), null);
       if (
         old &&
-        (old.manifest !== v.manifest ||
+        (!sameSource(old.source, origin) ||
+          old.manifest !== v.manifest ||
           old.size !== v.size ||
           old.name !== name(v.name) ||
           old.mime !==
             String(v.mime || "application/octet-stream").slice(0, 100))
       )
         throw fail(409, "任务编号对应的文件已改变");
-      if (!old)
+      if (!old) {
         save(path.join(dir, "job.json"), {
           id: canonical,
+          source: origin,
           name: name(v.name),
           size: v.size,
           mime: String(v.mime || "application/octet-stream").slice(0, 100),
@@ -435,7 +462,16 @@ async function serve(req, res) {
           createdAt: Date.now(),
           updatedAt: Date.now(),
         });
-      else {
+        // A new origin/source keeps its own record but can resume shared saved bytes.
+        // snapshot() verifies every copied block before telling the browser to skip it.
+        if (reuseFrom) for (let i = 0; i < v.blocks.length; i++) {
+          try {
+            await fsp.copyFile(path.join(uploads, reuseFrom, String(i)), path.join(dir, String(i)), fs.constants.COPYFILE_EXCL);
+          } catch (e) {
+            if (!["ENOENT", "EEXIST"].includes(e.code)) log("chunk_reuse_unavailable", { reason: e.code || "storage" });
+          }
+        }
+      } else {
         old.updatedAt = Date.now();
         save(path.join(dir, "job.json"), old);
       }
@@ -474,7 +510,7 @@ async function serve(req, res) {
     return json(res, 201, { ok: true });
   }
   if (req.method === "GET" && u.pathname === "/api/archives")
-    return json(res, 200, { items: archived });
+    return json(res, 200, { items: archived, sources: sourceCatalog() });
   if (
     req.method === "GET" &&
     /^\/api\/(download|archive-download|preview)\//.test(u.pathname)

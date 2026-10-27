@@ -47,7 +47,7 @@ let stopping = false,
 const admin = crypto.randomBytes(32).toString("hex");
 const state = {
   pid: process.pid,
-  version: "3.0.0",
+  version: require("../../package.json").version,
   webState: "starting",
   tunnelState: config.tunnel.mode === "off" ? "off" : "starting",
   webPid: null,

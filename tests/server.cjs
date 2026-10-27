@@ -201,3 +201,45 @@ test("single-host durable transfers survive interruption without advertising par
   assert.equal((await api(s, "/api/pair/create", { json: {} })).status, 404);
   assert.equal((await api(s, "/api/peers")).status, 404);
 });
+
+test("independent sources remain distinct for identical files, retries, restarts and archives", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "file-bridge-sources-"));
+  let s = await start(dir);
+  t.after(async () => { await stop(s); await fsp.rm(dir, { recursive: true, force: true }); });
+  const a = { id: crypto.randomUUID(), name: '办公室主机' },
+    b = { id: crypto.randomUUID(), name: '办公室主机' }; // Identical names still have different identities.
+  const bytes = Buffer.from('same file from two hosts'), base = manifest(bytes);
+  const upload = async (source) => {
+    const m = { ...base, id: crypto.randomUUID(), source };
+    const prepared = json(await api(s, '/api/uploads', { json: m }));
+    assert.equal(prepared.id, m.id);
+    await api(s, '/api/uploads/' + m.id + '/chunks/0', { method: 'PUT', raw: bytes });
+    return json(await api(s, '/api/uploads/' + m.id + '/complete', { json: {} })).item;
+  };
+  const [ia, ib] = await Promise.all([upload(a), upload(b)]);
+  assert.notEqual(ia.id, ib.id);
+  assert.deepEqual(ia.source, a); assert.deepEqual(ib.source, b);
+  const newOrigin = { ...base, id: crypto.randomUUID(), source: { id: crypto.randomUUID(), name:'换网址后的浏览器' } };
+  const resumed = json(await api(s, '/api/uploads', { json: newOrigin }));
+  assert.equal(resumed.id, newOrigin.id);
+  assert.deepEqual(resumed.present, [0], 'new source after a tunnel URL change reuses verified host chunks without merging source records');
+
+  const retry = json(await api(s, '/api/uploads', { json: { ...base, id: crypto.randomUUID(), source: a } }));
+  assert.equal(retry.id, ia.id);
+  assert.equal((await api(s, '/api/uploads', { json: { ...base, id: ia.id, source: b } })).status, 409);
+  const ta = { id: crypto.randomUUID(), text: 'host text', source: a };
+  assert.equal((await api(s, '/api/text', { json: ta })).status, 201);
+  assert.equal((await api(s, '/api/text', { json: { ...ta, source: b } })).status, 409);
+  assert.equal((await api(s, '/api/text', { json: { ...ta, id: crypto.randomUUID(), source: { id: 'bad', name: 'x' } } })).status, 400);
+  for (const bad of [{id:a.id,name:'x'.repeat(41)},{id:a.id,name:'bad\nname'}])
+    assert.equal((await api(s, '/api/text', { json: { id:crypto.randomUUID(),text:'invalid',source:bad } })).status,400);
+  await api(s, '/api/archive/' + ia.id, { json: {} });
+  await stop(s, 'SIGKILL'); s = await start(dir);
+  const archiveResponse = json(await api(s, '/api/archives'));
+  assert.deepEqual(archiveResponse.items[0].source, a);
+  assert.deepEqual(archiveResponse.sources.map(x=>x.id).sort(),[a.id,b.id].sort());
+  const items = json(await api(s, '/api/items')).items;
+  assert.equal(items.filter(i => i.source?.id === a.id).length, 2);
+  assert.equal(items.filter(i => i.source?.id === b.id).length, 1);
+  assert.deepEqual(Buffer.from((await api(s, ib.download)).body), bytes);
+});

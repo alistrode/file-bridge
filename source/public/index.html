@@ -21,6 +21,14 @@
         <span id="connection" role="status">正在连接…</span>
       </header>
       <p id="notice" role="status" aria-live="polite"></p>
+      <section class="card source-card">
+        <form id="sourceForm" class="source-form">
+          <label for="sourceName">本机来源名称</label>
+          <input id="sourceName" maxlength="40" required autocomplete="off" aria-describedby="sourceHint">
+          <button type="submit" class="secondary">保存名称</button>
+        </form>
+        <p id="sourceHint" class="muted">多台主机打开同一网址，内容统一接收，按来源区分。名称保存在此浏览器，无需配对。</p>
+      </section>
       <div class="send-grid">
         <section class="card">
           <h2>发送文字</h2>
@@ -77,6 +85,10 @@
         <p id="retention" class="muted">
           最近内容保留 24 小时，归档后保存在主机上。
         </p>
+        <div class="source-filter"><label for="sourceFilter">按来源查看</label>
+          <select id="sourceFilter"><option value="*">全部来源</option></select>
+          <span id="sourceCount" class="muted"></span>
+        </div>
         <div id="items" aria-live="polite"><p class="empty">正在加载…</p></div>
       </section>
       <footer>同一个网址，同一份内容。主机需要保持开机和联网。</footer>

@@ -213,6 +213,11 @@ class CDP {
     record(
       "Actual Windows browsers open the same public HTTPS website without pairing",
     );
+    await a.fill("#sourceName", "办公室主机"); await a.click("#sourceForm button");
+    await b.fill("#sourceName", "家中主机"); await b.click("#sourceForm button");
+    const sourceA = await a.eval('JSON.parse(localStorage.getItem("file-bridge-source"))'),
+      sourceB = await b.eval('JSON.parse(localStorage.getItem("file-bridge-source"))');
+    assert.notEqual(sourceA.id, sourceB.id);
     const stamp = crypto.randomBytes(3).toString("hex"),
       textA = "离线文字：刷新后继续发送。" + stamp,
       textB = "手机页面：同一个网址，无需连接设备。" + stamp;
@@ -250,6 +255,11 @@ class CDP {
         ")",
     );
     record("Independent mobile viewport sends text back through the same host");
+    for (const [text, source] of [[textA, sourceA], [textB, sourceB]]) {
+      const item = await a.eval(`(async()=>{const r=await(await fetch('/api/items')).json();return r.items.find(i=>i.text===${JSON.stringify(text)});})()`);
+      assert.deepEqual(item.source, source);
+    }
+    record("Separate browser sources retain distinct names and identities in the unified website");
     let zero = 0,
       blocked = false,
       block = true;
@@ -341,8 +351,35 @@ class CDP {
     record(
       "Image preview, mobile layout and browser JavaScript checks passed on Windows",
     );
-    await client.screenshot(a, "single-host-windows-desktop.png");
-    await client.screenshot(b, "single-host-windows-mobile.png");
+    await b.eval(
+      `(()=>{const bytes=new Uint8Array(${length});for(let i=0;i<bytes.length;i++)bytes[i]=i%251;const dt=new DataTransfer();dt.items.add(new File([bytes],${JSON.stringify(name)},{type:'application/octet-stream'}));const i=document.querySelector('#file');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+    );
+    await b.click("#sendFile");
+    await b.until(`Array.from(document.querySelectorAll('#queue .entry')).find(x=>x.textContent.includes(${JSON.stringify(name)}))?.textContent.includes('主机已保存')`, 120000);
+    await a.until(`Array.from(document.querySelectorAll('#items a')).filter(x=>x.textContent===${JSON.stringify("下载：" + name)}).length===2`);
+    const origins = await a.eval(`(async()=>{const r=await(await fetch('/api/items')).json();return r.items.filter(i=>i.name===${JSON.stringify(name)}).map(i=>i.source.id).sort();})()`);
+    assert.deepEqual(origins, [sourceA.id,sourceB.id].sort());
+    await a.eval(`(()=>{const s=document.querySelector('#sourceFilter');s.value=${JSON.stringify(sourceB.id)};s.dispatchEvent(new Event('change'));})()`);
+    await a.until(`document.querySelector('#items').textContent.includes(${JSON.stringify(textB)})&&!document.querySelector('#items').textContent.includes(${JSON.stringify(textA)})`);
+    await a.click('#archiveTab');
+    await a.until("document.querySelector('#items').textContent.includes('此来源暂无内容')");
+    await a.click('#recentTab');
+    await a.eval("(()=>{const s=document.querySelector('#sourceFilter');s.value='*';s.dispatchEvent(new Event('change'));})()");
+    await a.until(`Array.from(document.querySelectorAll('#items a')).filter(x=>x.textContent===${JSON.stringify("下载：" + name)}).length===2`);
+    record("Identical files uploaded by different sources stay separate; recent and archive filters retain all source options");
+    for (const [page,label] of [[a,'desktop'],[b,'mobile']]) {
+      await page.eval("(async()=>{document.activeElement.blur();for(const i of document.images)i.loading='eager';await Promise.all(Array.from(document.images,i=>i.decode().catch(()=>{})));})()");
+      await page.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+      await sleep(500);
+      await client.screenshot(page, 'source-windows-'+label+'-warmup.png');
+      await sleep(500);
+      await client.screenshot(page, 'single-host-windows-'+label+'.png');
+      await client.screenshot(page, 'source-windows-'+label+'-repeat.png');
+      const first=fs.readFileSync(path.join(out,'single-host-windows-'+label+'.png')),
+        second=fs.readFileSync(path.join(out,'source-windows-'+label+'-repeat.png'));
+      assert(first.equals(second), label+' stable screenshots differ; inspect PNGs before acceptance');
+    }
+    record("Stable desktop and mobile repeat screenshots are byte-identical PNGs (no design reference supplied)");
     const report = {
       passed: true,
       platform: process.platform,
