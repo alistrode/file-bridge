@@ -94,6 +94,8 @@ python scripts/verify-release-download.py
 
 
 
+| `scripts/call-connected-host.mjs` | 调用已授权的 SSH Relay 源码安装的 MCP（依赖固定于该组件的 package-lock）；不属于网站运行依赖。 |
+
 旧的临时原子补丁应用命令已由 tests/Deploy-Sources.ps1 覆盖，修复代码本身保存在 source/server.js、source/public/app.js 与 source/host/storage.cjs；旧 CDP/恢复实验已由表中的可复现验收脚本覆盖。无效的旧配对脚本、失败传输请求、过期授权链接和含令牌的日志不作为发布内容。
 
 ## 实际主机配置索引
@@ -112,3 +114,5 @@ python scripts/verify-release-download.py
 文件完整性审计已通过，3.1.1 Release 仍为草稿。恢复远端本会话连接权限并释放连接位后，复跑 scripts/Restart-Clean-Package-Verification.ps1，按 artifacts/package-verification-task.txt 查询本次唯一任务，要求最终结果包含 compatibilityPowerShell=true，不能把旧文件或单独正常入口成功当作完整复跑成功。候选附件可先用 `python scripts/verify-release-download.py --allow-draft` 核对内容和 attachment 头，该结果只表示附件完整，不代表运行验收通过。全部完成后才发布 3.1.1 正式下载。
 
 兼容后台包装器在显式停止后的退出码仅作诊断记录；启动、包内运行时、哈希和停止的有效性由 Node 验证器实际断言。当前修正后仍须完成复跑，不能仅据旧的包装器退出码判断完整验收结果。
+
+远端维护调用完整入口：`node scripts/call-connected-host.mjs RELAY_SOURCE NEAR_STATE MCP_STATE < /private/request.json`。请求由 prepare-package-verification.py 生成，或是已有 MCP 的 ssh_execute/ssh_download/ssh_operation_status 参数；私有请求文件不提交。设备返回 remote_paused/enabled=false 时停止远端执行，不新建身份绕过暂停，不占用其他控制器凭据。
