@@ -24,7 +24,7 @@ Stop-Process -Id $r.webPid -Force
 $ready=$false
 for($i=0;$i -lt 100;$i++){
  Start-Sleep -Milliseconds 300
- try{$h=Invoke-RestMethod 'http://127.0.0.1:18791/health' -TimeoutSec 2;if($h.version -eq '3.1.0'){$ready=$true;break}}catch{}
+ try{$h=Invoke-RestMethod 'http://127.0.0.1:18791/health' -TimeoutSec 2;if($h.version -eq ((Get-Content ($root+'\source\package.json') -Raw|ConvertFrom-Json).version)){$ready=$true;break}}catch{}
 }
 if(!$ready){throw 'Updated website has not recovered'}
 if($RestartTunnel){
@@ -49,4 +49,4 @@ $a.Path='C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 $command="Set-Location '$root'; & 'C:\Program Files\nodejs\node.exe' --test tests/server.cjs tests/storage.cjs | Out-File '$root\artifacts\windows-sources-unit.log' -Encoding utf8; if(`$LASTEXITCODE -ne 0){exit 1}; & '$root\tests\Windows-Browser.ps1'"
 $a.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand '+[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
 $t=$folder.RegisterTaskDefinition('FileBridge-Single-Browser-Final',$def,6,$null,$null,3);$t.Run($null)|Out-Null
-'File Bridge 3.1 website deployed; actual Windows browser verification started'
+'File Bridge website deployed; actual Windows browser verification started'
