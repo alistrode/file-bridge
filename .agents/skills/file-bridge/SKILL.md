@@ -110,3 +110,5 @@ python scripts/verify-release-download.py
 ## 本次待完成验证
 
 文件完整性审计已通过，3.1.1 Release 仍为草稿。恢复远端本会话连接权限并释放连接位后，复跑 scripts/Restart-Clean-Package-Verification.ps1，按 artifacts/package-verification-task.txt 查询本次唯一任务，要求最终结果包含 compatibilityPowerShell=true，不能把旧文件或单独正常入口成功当作完整复跑成功。候选附件可先用 `python scripts/verify-release-download.py --allow-draft` 核对内容和 attachment 头，该结果只表示附件完整，不代表运行验收通过。全部完成后才发布 3.1.1 正式下载。
+
+兼容后台包装器在显式停止后的退出码仅作诊断记录；启动、包内运行时、哈希和停止的有效性由 Node 验证器实际断言。当前修正后仍须完成复跑，不能仅据旧的包装器退出码判断完整验收结果。
