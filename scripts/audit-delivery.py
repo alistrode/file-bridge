@@ -3,7 +3,7 @@ import argparse,hashlib,json,pathlib,subprocess,zipfile,xml.etree.ElementTree as
 p=argparse.ArgumentParser();p.add_argument('--remote',action='store_true');a=p.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];skill=(root/'.agents/skills/file-bridge/SKILL.md').read_text()
 tracked=subprocess.check_output(['git','ls-files','-z'],cwd=root,text=True).split('\0');tracked=[f for f in tracked if f]
-commands=[f for f in tracked if f.endswith(('.cmd','.sh','.ps1','.cjs','.py','.vbs')) or f.startswith('.github/workflows/')]
+commands=[f for f in tracked if f.endswith(('.cmd','.sh','.ps1','.cjs','.mjs','.py','.vbs')) or f.startswith('.github/workflows/')]
 missing=[f for f in commands if f not in skill]
 if missing:raise SystemExit('Missing skill command index: '+', '.join(missing))
 configs=[f for f in tracked if f.startswith('config/')]
