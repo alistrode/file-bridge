@@ -88,11 +88,11 @@ python scripts/verify-release-download.py
 | `tests/storage.cjs` | 原子状态写入、实际 Windows 文件锁及失败清理测试。 |
 | `tests/windows-live-recovery.cjs` | 实际 Windows 本实例网站/隧道进程恢复；只针对授权 profile。 |
 | `tests/windows-startup.cjs` | 真实当前用户 Startup 快捷方式验证和清理。 |
-
 | `scripts/Export-Windows-Configuration.ps1` | 导出实际 Windows 的三个有用任务定义和白名单主机配置，不读取或上传凭据。 |
 | `scripts/Stop-Package-Verification.ps1` | 仅清理 release/package-verification-* 下的本人测试实例；检查进程命令行归属，不操作正式网站。 |
-
 | `scripts/Restart-Clean-Package-Verification.ps1` | 用已完整校验的 ZIP 新解压验证；只清理本人的验证任务/实例，异步检查 Windows 兼容入口。 |
+
+
 
 旧的临时原子补丁应用命令已由 tests/Deploy-Sources.ps1 覆盖，修复代码本身保存在 source/server.js、source/public/app.js 与 source/host/storage.cjs；旧 CDP/恢复实验已由表中的可复现验收脚本覆盖。无效的旧配对脚本、失败传输请求、过期授权链接和含令牌的日志不作为发布内容。
 
@@ -106,3 +106,7 @@ python scripts/verify-release-download.py
 以上是指定 E:\xxm 布局的可复现维护配置，XML 仅规范化文本编码和换行；普通单文件夹包启动自动生成自己的 var/，无需导入这些任务。在相同已授权布局恢复任务定义的命令是 `Register-ScheduledTask -TaskName NAME -Xml (Get-Content config/windows/NAME.xml -Raw) -Force`，不会自动启动任务。跨机器先适配账号和路径，不能盲目导入旧 SID。
 
 远端下载中断时，使用 scripts/prepare-package-verification.py 的 `--resume-existing` 选项生成新请求；只续传同一候选归档，最终 SHA-256 与完整包不一致时禁止解压或启动。分段缓存和短期授权链接不提交仓库。
+
+## 本次待完成验证
+
+文件完整性审计已通过，3.1.1 Release 仍为草稿。恢复远端本会话连接权限并释放连接位后，复跑 scripts/Restart-Clean-Package-Verification.ps1，按 artifacts/package-verification-task.txt 查询本次唯一任务，要求最终结果包含 compatibilityPowerShell=true，不能把旧文件或单独正常入口成功当作完整复跑成功。候选附件可先用 `python scripts/verify-release-download.py --allow-draft` 核对内容和 attachment 头，该结果只表示附件完整，不代表运行验收通过。全部完成后才发布 3.1.1 正式下载。

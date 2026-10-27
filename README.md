@@ -1,4 +1,4 @@
-# File Bridge 3.1
+# File Bridge 3.1.1
 
 一个主机运行网站并连接 Cloudflare 隧道。手机和电脑打开同一个完整网址，即可互传文字、图片和最大 1 GB 的文件。浏览器无需安装客户端，也没有设备配对、设备列表或双端连接。
 
@@ -12,7 +12,9 @@
 
 ## Windows 完整运行包
 
-[直接下载 Windows x64 完整包](https://github.com/trlstdin/rororororo/releases/download/file-bridge-v3.1.0/File-Bridge-3.1.0-windows-x64.zip)。同一文件也保存在本项目分支 `release/File-Bridge-3.1.0-windows-x64.zip`。
+3.1.1 已补齐兼容入口、实际配置与操作索引。静态完整性检查和主要 Windows 运行检查通过；最终兼容验收包装器复跑受远端禁用本会话连接阻断，Release 暂保持草稿。此处不宣称最终验收全通过，详见 docs/HANDOFF.md。私有仓库下载需要有访问权限的 GitHub 账号。
+
+[下载分支中的 Windows x64 候选完整包](https://github.com/trlstdin/rororororo/raw/refs/heads/projects/file-bridge/release/File-Bridge-3.1.1-windows-x64.zip)。同一文件也保存在本项目分支 `release/File-Bridge-3.1.1-windows-x64.zip`。
 
 完整解压后双击 `Start-File-Bridge.cmd`，无需另装 Node.js、npm 或 cloudflared；公网地址准备好后打开普通默认浏览器。`Open-File-Bridge.cmd` 再次打开，`Stop-File-Bridge.cmd` 停止本实例。运行包不含私人令牌或接收内容，首次运行自动生成独立 `var/`。需要主机联网；临时隧道地址仍可能变化。
 
