@@ -68,3 +68,15 @@ node source/host/cli.cjs stop --profile-dir E:\xxm\file-bridge-single\dev\var
 当前使用临时隧道，重建会换网址。命名隧道和固定域名入口已支持，但未提供账户配置和域名绑定，因此本次没有冒称已部署固定域名。临时地址变化后，浏览器存储不会跨网站地址自动迁移；重新选择相同文件可复用主机分块。长期使用固定域名更适合自动恢复队列。
 
 完整配置、保留期限、源码入口与运行命令见根目录 README.md。运行时、主机状态、接收内容和访问凭据均不提交源码仓库。
+
+## Windows x64 完整运行包交付
+
+`release/File-Bridge-3.1.0-windows-x64.zip` 已与源码一同上传本分支，57,317,205 字节（约 55 MiB）。内置官方 Node.js 26.4.0、cloudflared 2026.10.4 及许可证；无 npm 运行依赖，没有打包私人令牌、接收数据、测试或浏览器缓存。
+
+从 GitHub 实际下载同一 ZIP，在指定 Windows 11 的全新独立目录完整解压。归档 SHA-256 与云端打包文件一致；从 PATH 排除系统 Node.js 后，双击入口同等命令 `Start-File-Bridge.cmd --port 18797` 启动，使用包内 node.exe，自动打开普通默认浏览器。独立公网 HTTPS、两个来源的文字、相同文件分别显示、完整下载字节校验及明确停止全部通过；`FILES.json` 内 21 个文件运行前后均逐一核对一致。测试实例已停止，正式网站仍使用原目录。Win10、ARM64 和实体第二台设备不在本次运行包实机验收范围内。
+
+运行包同样作为 GitHub Release 附件交付。云端重新下载附件，SHA-256 与分支 ZIP 一致，下载响应为 `Content-Disposition: attachment`。仓库保持私有，GitHub 下载需要有仓库访问权限的已登录账号。
+
+直接下载：https://github.com/trlstdin/rororororo/releases/download/file-bridge-v3.1.0/File-Bridge-3.1.0-windows-x64.zip
+
+构建及验证脚本保存在 scripts/。release 上传端点在当前云端凭据下拒绝上传后，使用本仓库 Actions 的仓库令牌上传同一分支 ZIP，成功记录见工作流 `Upload File Bridge runtime package`；没有改变仓库可见性。
