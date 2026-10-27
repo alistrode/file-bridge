@@ -102,3 +102,5 @@ python scripts/verify-release-download.py
 - `config/windows/FileBridge-Open-Normal-Browser.xml`：从私有 current-url.txt 动态读取入口并打开普通浏览器的实际任务。
 
 以上是指定 E:\xxm 布局的可复现维护配置，XML 仅转换了文本编码；普通单文件夹包启动自动生成自己的 var/，无需导入这些任务。在相同已授权布局恢复任务定义的命令是 `Register-ScheduledTask -TaskName NAME -Xml (Get-Content config/windows/NAME.xml -Raw) -Force`，不会自动启动任务。跨机器先适配账号和路径，不能盲目导入旧 SID。
+
+远端下载中断时，使用 scripts/prepare-package-verification.py 的 `--resume-existing` 选项生成新请求；只续传同一候选归档，最终 SHA-256 与完整包不一致时禁止解压或启动。分段缓存和短期授权链接不提交仓库。

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[string]$VerifierPsUrl='',[string]$VerifierJsUrl='',[string]$VerifierPsBase64='',[string]$VerifierJsBase64='',[string]$PackageVersion='3.1.1')
+param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[string]$VerifierPsUrl='',[string]$VerifierJsUrl='',[string]$VerifierPsBase64='',[string]$VerifierJsBase64='',[string]$PackageVersion='3.1.1',[switch]$ResumeExisting)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $base='E:\xxm\file-bridge-single'
@@ -15,9 +15,14 @@ if($VerifierPsBase64 -and $VerifierJsBase64){
  Invoke-WebRequest $VerifierJsUrl -OutFile ($dev+'\scripts\verify-windows-package.cjs') -UseBasicParsing -TimeoutSec 60
 }
 $curl=$env:SystemRoot+'\System32\curl.exe'
+if(!$ResumeExisting -and (Test-Path $zip)){Remove-Item -LiteralPath $zip}
 if(Test-Path $curl){
- & $curl --fail --location --silent --show-error --connect-timeout 15 --max-time 90 --retry 1 --retry-max-time 120 --output $zip $PackageUrl
- if($LASTEXITCODE -ne 0){throw 'Package archive download failed'}
+ $complete=$false
+ for($attempt=0;$attempt -lt 3;$attempt++){
+  & $curl --fail --location --silent --show-error --connect-timeout 15 --max-time 70 --continue-at - --output $zip $PackageUrl
+  if($LASTEXITCODE -eq 0){$complete=$true;break}
+ }
+ if(!$complete){throw 'Download incomplete; partial bytes retained. Resume with ResumeExisting and the same expected SHA-256.'}
 }else{Invoke-WebRequest $PackageUrl -OutFile $zip -UseBasicParsing -TimeoutSec 180}
 if((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower() -ne $ExpectedSha256.ToLower()){throw 'Downloaded archive differs from the packaged artifact'}
 Expand-Archive -LiteralPath $zip -DestinationPath $clean
