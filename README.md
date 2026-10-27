@@ -10,6 +10,14 @@
 
 当前仍是一台接收主机提供统一网站和隧道，其他主机用浏览器上传；不新增多接收服务器聚合或 SSH 连接功能。
 
+## Windows 完整运行包
+
+[直接下载 Windows x64 完整包](https://github.com/trlstdin/rororororo/releases/download/file-bridge-v3.1.0/File-Bridge-3.1.0-windows-x64.zip)。同一文件也保存在本项目分支 `release/File-Bridge-3.1.0-windows-x64.zip`。
+
+完整解压后双击 `Start-File-Bridge.cmd`，无需另装 Node.js、npm 或 cloudflared；公网地址准备好后打开普通默认浏览器。`Open-File-Bridge.cmd` 再次打开，`Stop-File-Bridge.cmd` 停止本实例。运行包不含私人令牌或接收内容，首次运行自动生成独立 `var/`。需要主机联网；临时隧道地址仍可能变化。
+
+内置 Node.js 26.4.0 与 cloudflared 2026.10.4 Windows x64 官方二进制及许可证。包内 `FILES.json` 保存文件完整性清单；构建脚本为 `scripts/build-windows-package.py`，独立目录实机验证脚本为 `scripts/Verify-Package.ps1` 和 `scripts/verify-windows-package.cjs`。实际验收范围见交接文档。
+
 ## 主机启动
 
 需要 Node.js 22+ 和官方 `cloudflared`；应用没有 npm 运行依赖。也可以把相应平台的二进制放入根目录 `runtime/`，Windows 命名为 `node.exe`、`cloudflared.exe`，Linux 命名为 `node`、`cloudflared`。第三方运行时应保留各自许可证。
