@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[Parameter(Mandatory=$true)][string]$VerifierPsUrl,[Parameter(Mandatory=$true)][string]$VerifierJsUrl,[string]$PackageVersion='3.1.1')
+param([Parameter(Mandatory=$true)][string]$ExpectedSha256,[Parameter(Mandatory=$true)][string]$PackageUrl,[string]$VerifierPsUrl='',[string]$VerifierJsUrl='',[string]$VerifierPsBase64='',[string]$VerifierJsBase64='',[string]$PackageVersion='3.1.1')
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $base='E:\xxm\file-bridge-single'
@@ -7,9 +7,18 @@ $clean=$base+'\release\package-verification-'+[Guid]::NewGuid().ToString('N')
 New-Item -ItemType Directory -Force ($base+'\release')|Out-Null
 $dev=$base+'\dev'
 New-Item -ItemType Directory -Force ($dev+'\scripts')|Out-Null
-Invoke-WebRequest $VerifierPsUrl -OutFile ($dev+'\scripts\Verify-Package.ps1') -UseBasicParsing -TimeoutSec 60
-Invoke-WebRequest $VerifierJsUrl -OutFile ($dev+'\scripts\verify-windows-package.cjs') -UseBasicParsing -TimeoutSec 60
-Invoke-WebRequest $PackageUrl -OutFile $zip -UseBasicParsing -TimeoutSec 300
+if($VerifierPsBase64 -and $VerifierJsBase64){
+ [IO.File]::WriteAllBytes($dev+'\scripts\Verify-Package.ps1',[Convert]::FromBase64String($VerifierPsBase64))
+ [IO.File]::WriteAllBytes($dev+'\scripts\verify-windows-package.cjs',[Convert]::FromBase64String($VerifierJsBase64))
+}else{
+ Invoke-WebRequest $VerifierPsUrl -OutFile ($dev+'\scripts\Verify-Package.ps1') -UseBasicParsing -TimeoutSec 60
+ Invoke-WebRequest $VerifierJsUrl -OutFile ($dev+'\scripts\verify-windows-package.cjs') -UseBasicParsing -TimeoutSec 60
+}
+$curl=$env:SystemRoot+'\System32\curl.exe'
+if(Test-Path $curl){
+ & $curl --fail --location --silent --show-error --connect-timeout 15 --max-time 90 --retry 1 --retry-max-time 120 --output $zip $PackageUrl
+ if($LASTEXITCODE -ne 0){throw 'Package archive download failed'}
+}else{Invoke-WebRequest $PackageUrl -OutFile $zip -UseBasicParsing -TimeoutSec 180}
 if((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower() -ne $ExpectedSha256.ToLower()){throw 'Downloaded archive differs from the packaged artifact'}
 Expand-Archive -LiteralPath $zip -DestinationPath $clean
 $root=Join-Path $clean ('File-Bridge-'+$PackageVersion+'-windows-x64')
